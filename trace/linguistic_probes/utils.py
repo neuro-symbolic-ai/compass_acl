@@ -1,0 +1,676 @@
+import torch
+import numpy as np
+from torch.utils.data import TensorDataset, DataLoader
+from tqdm import tqdm
+from typing import Dict, List, Optional, Union
+from collections import Counter
+
+from .taggers import POSTagger, SemanticTagger
+from .config import LinguisticProbesConfig
+from trace.transformer import get_model_source
+
+def extract_hidden_representations_with_pos_semantic1(
+        model, # did not specify type here to avoid circular import issues and to keep it flexible
+        dataloader: DataLoader,
+        device: str,
+        layer_indices: Optional[Union[List[int], Dict[str, List[int]]]] = None,
+        tokenizer=None,
+        config: Optional[LinguisticProbesConfig] = None,
+) -> tuple:
+    """
+    Extract hidden representations from specified transformer layers.
+
+    Args:
+        model: The transformer model
+        dataloader: DataLoader with input data
+        device: Device for computation
+        layer_indices: Which layers to extract from and decoder or encoder
+        tokenizer: Tokenizer for decoding sequences
+        config: Configuration object
+
+    Returns:
+        Tuple of (hidden_states_dict, pos_labels, semantic_labels)
+    """
+    model.eval()
+    # print('Initial layer indices:', layer_indices)
+    # Set default layer indices
+    if layer_indices is None:
+        if model.model_type == 'encoder_only' and hasattr(model.encoder, 'layers'):
+            layer_indices = {'encoder':  list(range(len(model.encoder.layers)))}  # Default to first layer
+        elif model.model_type == 'decoder_only' and hasattr(model.decoder, 'layers'):
+            layer_indices = {'decoder': list(range(len(model.decoder.layers)))}  # Default to first layer
+        elif model.model_type == 'encoder_decoder':
+            encoder_layers = list(range(len(model.encoder.layers))) if hasattr(model.encoder, 'layers') else [0]
+            decoder_layers = list(range(len(model.decoder.layers))) if hasattr(model.decoder, 'layers') else [0]
+            layer_indices = {'encoder': encoder_layers, 'decoder': decoder_layers}
+
+    elif isinstance(layer_indices, list):
+        if model.model_type == 'encoder_only':
+            layer_indices = {'encoder': layer_indices}
+        elif model.model_type == 'decoder_only':
+            layer_indices = {'decoder': layer_indices}
+        elif model.model_type == 'encoder_decoder':
+            # For compatibility, apply to decoder only since no key is given
+            layer_indices = {'decoder': layer_indices}
+    elif isinstance(layer_indices, dict):
+        layer_indices = layer_indices
+
+    # print(f"Extracting hidden states from updated layers: {layer_indices}")
+
+    # Initialize hidden states dictionary
+    hidden_dict = {}
+    for layer_type, indices in layer_indices.items():
+        for idx in indices:
+            hidden_dict[(idx, layer_type)] = []
+
+    pos_labels = []
+    semantic_labels = []
+
+    # Set up hooks to capture hidden states
+    def save_hidden_state(index, layer_type=None):
+
+        def hook(module, input, output):
+            # hidden = output[0] if isinstance(output, tuple) else output
+            # hidden_dict[key].append(hidden.detach().cpu())
+            if layer_type is not None:
+                # For encoder-decoder models, use tuple keys
+                key = (index, layer_type)
+            else:
+                key = index[1] if isinstance(index, tuple) else index
+            hidden = output[0] if isinstance(output, tuple) else output
+            hidden_dict[key].append(hidden.detach().cpu())
+        return hook
+
+    handles = []
+
+    # Register hooks based on model architecture
+    if model.model_type != 'encoder_decoder':
+        for layer_index in layer_indices['encoder'] if model.model_type == 'encoder_only' else layer_indices['decoder']:
+            # print(f"Registering hook for layer {layer_index}")
+            try:
+                if  model.model_type == 'encoder_only' and hasattr(model.encoder, 'layers'):
+                    handle = model.encoder.layers[layer_index].register_forward_hook(save_hidden_state(layer_index, 'encoder'))
+                elif model.model_type == 'decoder_only' and hasattr(model.decoder, 'layers'):
+                    handle = model.decoder.layers[layer_index].register_forward_hook(save_hidden_state(layer_index, 'decoder'))
+                handles.append(handle)
+            except (AttributeError, IndexError) as e:
+                print(f"Warning: Could not register hook for layer {layer_index}: {e}")
+            # print(f"Hook registered for layer {layer_index} with handle {handle}")
+    else:
+        # For encoder-decoder models, register hooks for both encoder and decoder layers
+        for layer_index in layer_indices['encoder']:
+            try:
+                handle = model.encoder.layers[layer_index(1)].register_forward_hook(save_hidden_state(layer_index, 'encoder'))
+                handles.append(handle)
+            except (AttributeError, IndexError) as e:
+                print(f"Warning: Could not register hook for encoder layer {layer_index}: {e}")
+
+        for layer_index in layer_indices['decoder']:
+            try:
+                handle = model.decoder.layers[layer_index(1)].register_forward_hook(save_hidden_state(layer_index, 'decoder'))
+                handles.append(handle)
+            except (AttributeError, IndexError) as e:
+                print(f"Warning: Could not register hook for decoder layer {layer_index}: {e}")
+
+
+    # Extract representations
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Extracting Hidden States"):
+            input_ids = batch["input_ids"].to(device)
+            print(f"Input IDs shape: {input_ids.shape}")
+            attention_mask = batch.get('attention_mask', None)
+
+            # Create labels if tokenizer is provided
+            if tokenizer is not None:
+                print("Creating POS labels")
+                if config.track_pos:
+                    print("adding POS labels")
+                    pos_labels.append(create_one_hot_pos_labels(input_ids, tokenizer, config))
+                if config is None or config.track_semantic:
+                    semantic_labels.append(create_one_hot_semantic_labels(input_ids, tokenizer, config))
+
+            if model.model_type == 'encoder_only':
+                # Forward pass for encoder
+                _ = model(src=input_ids)
+            elif model.model_type == 'decoder_only':
+                # Forward pass for decoder
+                print("Forwarding through decoder-only model")
+                _ = model(tgt=input_ids)
+            elif model.model_type == 'encoder_decoder':
+                # Forward pass for encoder
+                _ = model(src=input_ids, tgt=input_ids)  # Assuming src and tgt are the same for simplicity
+
+    # Clean up hooks
+    for handle in handles:
+        handle.remove()
+    # Concatenate results
+    # hidden_states = {i: torch.cat(hidden_dict[i], dim=0) for i in layer_indices if hidden_dict[i]}
+    hidden_states = {}
+    if model.model_type != 'encoder_decoder':
+        for layer_index in layer_indices['encoder'] if model.model_type == 'encoder_only' else layer_indices['decoder']:
+            key = (layer_index, 'encoder' if model.model_type == 'encoder_only' else 'decoder')
+            # key = layer_index if isinstance(layer_index, int) else (layer_index, 'encoder' if model.model_type == 'encoder_only' else 'decoder')
+            if key in hidden_dict:
+                hidden_states[key] = torch.cat(hidden_dict[key], dim=0)
+    else:
+        # For encoder-decoder models, use tuple keys
+        for (layer_index, layer_type) in layer_indices['encoder']:
+            if hidden_dict[(layer_index, 'encoder')]:
+                hidden_states[(layer_index, 'encoder')] = torch.cat(hidden_dict[(layer_index, 'encoder')], dim=0)
+        for (layer_index, layer_type) in layer_indices['decoder']:
+            if hidden_dict[(layer_index, 'decoder')]:
+                hidden_states[(layer_index, 'decoder')] = torch.cat(hidden_dict[(layer_index, 'decoder')], dim=0)
+    # Concatenate labels if available
+    final_pos_labels = torch.cat(pos_labels, dim=0) if pos_labels else None
+    final_semantic_labels = torch.cat(semantic_labels, dim=0) if semantic_labels else None
+    return hidden_states, final_pos_labels, final_semantic_labels
+
+
+def prepare_probing_dataset(
+        hidden_states: torch.Tensor,
+        labels: torch.Tensor,
+        batch_size: int = 32
+) -> DataLoader:
+    """
+    Prepare a DataLoader for probing experiments.
+    """
+    B, T, D = hidden_states.shape
+    X = hidden_states.view(B * T, D)
+    y = labels.repeat_interleave(T, dim=0)
+    dataset = TensorDataset(X, y)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+
+def create_one_hot_labels(
+        input_ids: torch.Tensor,
+        tokenizer,
+        label_type: str,
+        config: Optional[LinguisticProbesConfig] = None
+) -> torch.Tensor:
+    """
+    Create one-hot encoded labels for input sequences.
+
+    Args:
+        input_ids: Input token IDs
+        tokenizer: Tokenizer for decoding
+        label_type: Type of labels ('pos' or 'semantic')
+        config: Configuration object
+
+    Returns:
+        One-hot encoded labels
+    """
+    if label_type == 'pos':
+        return create_one_hot_pos_labels(input_ids, tokenizer, config)
+    elif label_type == 'semantic':
+        return create_one_hot_semantic_labels(input_ids, tokenizer, config)
+    else:
+        raise ValueError(f"Unknown label type: {label_type}")
+
+
+def create_one_hot_pos_labels(
+        input_ids: torch.Tensor,
+        tokenizer,
+        config: Optional[LinguisticProbesConfig] = None,
+        ignore_index: int = -100
+) -> torch.Tensor:
+    """
+    Create one-hot POS labels for input sequences.
+
+    Args:
+        input_ids: Input token IDs
+        tokenizer: Tokenizer for decoding
+        config: Configuration object
+
+    Returns:
+        One-hot encoded POS labels
+    """
+    print("Creating one-hot POS labels...")
+    if config is None: # fallback to default config
+        config = LinguisticProbesConfig.default()
+
+    # Get POS categories
+    pos_to_idx = config.get_pos_categories()
+    num_features = len(pos_to_idx)
+
+    # Initialize tagger
+    granularity = config.pos_granularity
+    tagger = POSTagger(granularity=granularity)
+
+    labels = []
+
+    for sentence_ids in input_ids:
+        token_ids = sentence_ids.detach().cpu().tolist()
+        # Remove padding tokens
+        if tokenizer.pad_token_id is not None:
+            token_ids = [t for t in token_ids if t != tokenizer.pad_token_id and t != ignore_index]  # ignore_index is used in some tokenizers
+        else:
+            token_ids = [t for t in token_ids if t != 0] # we use 0 as the padding token in many tokenizers
+        text = tokenizer.decode(token_ids)
+        tagged_tokens = tagger.tag_text(text)
+
+        label = np.zeros(num_features, dtype=np.float32)
+        for _, pos in tagged_tokens:
+            if pos in pos_to_idx:
+                label[pos_to_idx[pos]] = 1
+            else:
+                # Fallback to OTHER if available
+                if "OTHER" in pos_to_idx:
+                    label[pos_to_idx["OTHER"]] = 1
+
+        labels.append(label)
+
+    return torch.tensor(labels, dtype=torch.float32)
+
+
+def create_one_hot_semantic_labels(
+        input_ids: torch.Tensor,
+        tokenizer,
+        config: Optional[LinguisticProbesConfig] = None,
+        ignore_index: int = -100
+) -> torch.Tensor:
+    """
+    Create one-hot semantic labels for input sequences.
+
+    Args:
+        input_ids: Input token IDs
+        tokenizer: Tokenizer for decoding
+        config: Configuration object
+
+    Returns:
+        One-hot encoded semantic labels
+    """
+    if config is None:
+        config = LinguisticProbesConfig.default()
+
+    # Get semantic categories
+    semantic_to_idx = config.get_semantic_categories()
+    # print(f"Semantic categories: {semantic_to_idx}")
+    num_features = len(semantic_to_idx)
+
+    # Initialize tagger
+    granularity = config.semantic_granularity
+    tagger = SemanticTagger(granularity=granularity)
+
+    labels = []
+
+    for sentence_ids in input_ids:
+        token_ids = sentence_ids.detach().cpu().tolist()
+        # Remove padding tokens
+        if tokenizer.pad_token_id is not None:
+            token_ids = [t for t in token_ids if t != tokenizer.pad_token_id and t != ignore_index]
+        else:
+            token_ids = [t for t in token_ids if t != 0]
+        text = tokenizer.decode(token_ids)
+        tagged_tokens = tagger.tag_text(text)
+
+        label = np.zeros(num_features, dtype=np.float32)
+        for _, role in tagged_tokens:
+            if role in semantic_to_idx:
+                label[semantic_to_idx[role]] = 1
+            else:
+                # Fallback to OTHER if available
+                if "OTHER" in semantic_to_idx:
+                    label[semantic_to_idx["OTHER"]] = 1
+
+        labels.append(label)
+
+    return torch.tensor(labels, dtype=torch.float32)
+
+
+def analyze_label_distribution(
+        dataloader: DataLoader,
+        tokenizer,
+        label_type: str,
+        config: Optional[LinguisticProbesConfig] = None,
+) -> Counter:
+    """
+    Analyze the distribution of labels in a dataset.
+    """
+    tag_counter = Counter()
+
+    for batch in dataloader:
+        input_ids = batch["input_ids"]
+        labels = create_one_hot_labels(input_ids, tokenizer, label_type, config)
+
+        for label in labels:
+            tag_counter.update(torch.where(label > 0)[0].tolist())
+
+    return tag_counter
+
+
+def print_label_distribution(
+        counter: Counter,
+        label_names: List[str],
+        title: str = "Label Distribution"
+) -> None:
+    """
+    Print formatted label distribution.
+    """
+    print(f"\n{title}:")
+    print("-" * 50)
+
+    total = sum(counter.values())
+    for idx, count in counter.most_common():
+        if idx < len(label_names):
+            name = label_names[idx]
+            percentage = (count / total) * 100 if total > 0 else 0
+            print(f"{name:<15}: {count:>6} ({percentage:>5.1f}%)")
+
+
+def extract_hidden_representations_with_pos_semantic(
+        model,
+        dataloader: DataLoader,
+        device: str,
+        layer_indices: Optional[Union[List[int], Dict[str, List[int]]]] = None,
+        tokenizer=None,
+        config: Optional[LinguisticProbesConfig] = None,
+) -> tuple:
+    """
+    Extract hidden representations from specified transformer layers.
+    Works with both original Transformer and HookedTransformer models.
+    """
+    model.eval()
+
+    # Detect model type
+    # is_hooked = hasattr(model, 'run_with_cache') and hasattr(model, 'hook_dict')
+    # model_class_name = model.__class__.__name__
+    # is_hooked = model_class_name == 'HookedTransformer'
+    #
+    # if is_hooked:
+    #     return _extract_from_hooked_model_probes(
+    #         model, dataloader, device, layer_indices, tokenizer, config
+    #     )
+    # else:
+    #     return _extract_from_original_model_probes(
+    #         model, dataloader, device, layer_indices, tokenizer, config
+    #     )
+    model_source = get_model_source(model)
+    if model_source == 'trace_vanilla':
+        return _extract_from_original_model_probes(
+            model, dataloader, device, layer_indices, tokenizer, config
+        )
+    elif model_source == 'trace_hooked':
+        return _extract_from_hooked_model_probes(
+            model, dataloader, device, layer_indices, tokenizer, config
+        )
+    elif model_source == 'transformerlens':
+        return _extract_from_transformerlens(
+            model, dataloader, device, layer_indices, tokenizer, config
+        )
+    else:
+        raise ValueError(f"Unrecognized model source: {model_source}")
+
+def _extract_from_transformerlens(
+        model, dataloader, device, layer_indices, tokenizer, config
+):
+    """Extract hidden states from TransformerLens model"""
+    if layer_indices is None:
+        layer_indices = list(range(model.cfg.n_layers))
+    # Collect hidden states
+    all_hidden_states = {}
+    if 'gpt' in model.cfg.model_name.lower() or 'pythia' in model.cfg.model_name.lower() or 'gemma' in model.cfg.model_name.lower() or 'llama' in model.cfg.model_name.lower():
+        layer_indices = {'decoder': layer_indices}
+    else:
+        layer_indices = {'encoder': layer_indices}
+    for layer_type, indices in layer_indices.items():
+        for idx in indices:
+            all_hidden_states[(idx, layer_type)] = []
+
+    pos_labels = []
+    semantic_labels = []
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Extracting Hidden States (Hooked)"):
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch.get("attention_mask", None)
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(device)
+            print(f"Input IDs shape: {input_ids.shape}")
+
+            # Create labels if tokenizer is provided
+            if tokenizer is not None:
+                if config and config.track_pos:
+                    print("Adding POS labels")
+                    pos_labels.append(create_one_hot_pos_labels(input_ids, tokenizer, config))
+                if config is None or config.track_semantic:
+                    print("Adding semantic labels")
+                    semantic_labels.append(create_one_hot_semantic_labels(input_ids, tokenizer, config))
+
+            # Forward pass
+            try:
+                _, cache = model.run_with_cache(input_ids, attention_mask=attention_mask)
+                for layer_type, indices in layer_indices.items():
+                    for idx in indices:
+                        key = f'blocks.{idx}.hook_resid_post'
+                        if key in cache:
+                            activation = cache[key]
+                            all_hidden_states[(idx, layer_type)].append(activation.detach().cpu())
+                        else:
+                            print(f"Warning: No activation found for {layer_type} layer {idx}")
+            except Exception as e:
+                print(f"Error processing batch: {e}")
+                continue
+
+    # Concatenate results
+    hidden_states = {}
+    for key, states_list in all_hidden_states.items():
+        if states_list:
+            hidden_states[key] = torch.cat(states_list, dim=0)
+    # Concatenate labels if available
+    final_pos_labels = torch.cat(pos_labels, dim=0) if pos_labels else None
+    final_semantic_labels = torch.cat(semantic_labels, dim=0) if semantic_labels else None
+    return hidden_states, final_pos_labels, final_semantic_labels
+
+
+def _extract_from_hooked_model_probes(
+        model, dataloader, device, layer_indices, tokenizer, config
+):
+    """Extract hidden states from HookedTransformer using run_with_cache"""
+
+    # Set default layer indices for hooked model
+    if layer_indices is None:
+        if model.model_type == 'encoder_only':
+            layer_indices = {'encoder': list(range(model.cfg.n_layers))}
+        elif model.model_type == 'decoder_only':
+            layer_indices = {'decoder': list(range(model.cfg.n_layers))}
+        elif model.model_type == 'encoder_decoder':
+            layer_indices = {
+                'encoder': list(range(model.cfg.num_encoder_layers)),
+                'decoder': list(range(model.cfg.num_decoder_layers))
+            }
+    elif isinstance(layer_indices, list):
+        if model.model_type == 'encoder_only':
+            layer_indices = {'encoder': layer_indices}
+        elif model.model_type == 'decoder_only':
+            layer_indices = {'decoder': layer_indices}
+        else:
+            layer_indices = {'decoder': layer_indices}
+
+    print(f"Extracting from hooked model, layers: {layer_indices}")
+
+    # Initialize storage
+    hidden_dict = {}
+    for layer_type, indices in layer_indices.items():
+        for idx in indices:
+            hidden_dict[(idx, layer_type)] = []
+
+    pos_labels = []
+    semantic_labels = []
+
+    # Process each batch using run_with_cache
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Extracting Hidden States (Hooked)"):
+            input_ids = batch["input_ids"].to(device)
+            print(f"Input IDs shape: {input_ids.shape}")
+
+            # Create labels if tokenizer is provided
+            if tokenizer is not None:
+                if config and config.track_pos:
+                    print("Adding POS labels")
+                    pos_labels.append(create_one_hot_pos_labels(input_ids, tokenizer, config))
+                if config is None or config.track_semantic:
+                    print("Adding semantic labels")
+                    semantic_labels.append(create_one_hot_semantic_labels(input_ids, tokenizer, config))
+
+            # Use run_with_cache to get all activations
+            try:
+                if model.model_type == 'decoder_only':
+                    print("Forwarding through hooked decoder-only model")
+                    _, cache = model.run_with_cache(input_ids=input_ids)
+                elif model.model_type == 'encoder_only':
+                    _, cache = model.run_with_cache(input_ids=input_ids)
+                elif model.model_type == 'encoder_decoder':
+                    _, cache = model.run_with_cache(src=input_ids, tgt=input_ids)
+
+                # Extract relevant layers from cache
+                for layer_type, indices in layer_indices.items():
+                    for idx in indices:
+                        # Get the appropriate hook name for this layer
+                        if model.model_type in ['decoder_only', 'encoder_only']:
+                            hook_name = f'blocks.{idx}.hook_resid_post'
+                        elif model.model_type == 'encoder_decoder':
+                            if layer_type == 'encoder':
+                                hook_name = f'encoder_blocks.{idx}.hook_resid_post'
+                            else:
+                                hook_name = f'decoder_blocks.{idx}.hook_resid_post'
+
+                        # Try to get the activation
+                        if hook_name in cache:
+                            hidden = cache[hook_name]
+                            hidden_dict[(idx, layer_type)].append(hidden.detach().cpu())
+                        else:
+                            # Try alternative hook names
+                            alternatives = [
+                                f'blocks.{idx}.hook_resid_mid',
+                                f'blocks.{idx}.hook_resid_pre'
+                            ]
+                            found = False
+                            for alt_name in alternatives:
+                                if alt_name in cache:
+                                    hidden = cache[alt_name]
+                                    hidden_dict[(idx, layer_type)].append(hidden.detach().cpu())
+                                    found = True
+                                    break
+
+                            if not found:
+                                print(f"Warning: No activation found for {layer_type} layer {idx}")
+
+            except Exception as e:
+                print(f"Error processing batch: {e}")
+                continue
+
+    # Concatenate results
+    hidden_states = {}
+    for key, states_list in hidden_dict.items():
+        if states_list:
+            hidden_states[key] = torch.cat(states_list, dim=0)
+
+    # Concatenate labels if available
+    final_pos_labels = torch.cat(pos_labels, dim=0) if pos_labels else None
+    final_semantic_labels = torch.cat(semantic_labels, dim=0) if semantic_labels else None
+
+    return hidden_states, final_pos_labels, final_semantic_labels
+
+
+def _extract_from_original_model_probes(
+        model, dataloader, device, layer_indices, tokenizer, config
+):
+    """Extract hidden states from original Transformer using manual hooks"""
+
+    # Set default layer indices for original model
+    if layer_indices is None:
+        if model.model_type == 'encoder_only' and hasattr(model, 'encoder'):
+            layer_indices = {'encoder': list(range(len(model.encoder.layers)))}
+        elif model.model_type == 'decoder_only' and hasattr(model, 'decoder'):
+            layer_indices = {'decoder': list(range(len(model.decoder.layers)))}
+        elif model.model_type == 'encoder_decoder':
+            encoder_layers = list(range(len(model.encoder.layers))) if hasattr(model, 'encoder') else []
+            decoder_layers = list(range(len(model.decoder.layers))) if hasattr(model, 'decoder') else []
+            layer_indices = {'encoder': encoder_layers, 'decoder': decoder_layers}
+    elif isinstance(layer_indices, list):
+        if model.model_type == 'encoder_only':
+            layer_indices = {'encoder': layer_indices}
+        elif model.model_type == 'decoder_only':
+            layer_indices = {'decoder': layer_indices}
+        else:
+            layer_indices = {'decoder': layer_indices}
+
+    print(f"Extracting from original model, layers: {layer_indices}")
+
+    # Initialize hidden states dictionary
+    hidden_dict = {}
+    for layer_type, indices in layer_indices.items():
+        for idx in indices:
+            hidden_dict[(idx, layer_type)] = []
+
+    pos_labels = []
+    semantic_labels = []
+
+    # Set up hooks to capture hidden states
+    def save_hidden_state(layer_idx, layer_type):
+        def hook(module, input, output):
+            key = (layer_idx, layer_type)
+            hidden = output[0] if isinstance(output, tuple) else output
+            hidden_dict[key].append(hidden.detach().cpu())
+
+        return hook
+
+    handles = []
+
+    # Register hooks based on model architecture
+    for layer_type, indices in layer_indices.items():
+        for layer_idx in indices:
+            try:
+                if layer_type == 'encoder' and hasattr(model, 'encoder'):
+                    handle = model.encoder.layers[layer_idx].register_forward_hook(
+                        save_hidden_state(layer_idx, 'encoder'))
+                    handles.append(handle)
+                elif layer_type == 'decoder' and hasattr(model, 'decoder'):
+                    handle = model.decoder.layers[layer_idx].register_forward_hook(
+                        save_hidden_state(layer_idx, 'decoder'))
+                    handles.append(handle)
+            except (AttributeError, IndexError) as e:
+                print(f"Warning: Could not register hook for {layer_type} layer {layer_idx}: {e}")
+
+    # Extract representations
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Extracting Hidden States (Original)"):
+            input_ids = batch["input_ids"].to(device)
+            # print(f"Input IDs shape: {input_ids.shape}")
+
+            # Create labels if tokenizer is provided
+            if tokenizer is not None:
+                if config and config.track_pos:
+                    # print("Adding POS labels")
+                    pos_labels.append(create_one_hot_pos_labels(input_ids, tokenizer, config))
+                if config is None or config.track_semantic:
+                    # print("Adding semantic labels")
+                    semantic_labels.append(create_one_hot_semantic_labels(input_ids, tokenizer, config))
+
+            # Forward pass
+            try:
+                if model.model_type == 'encoder_only':
+                    _ = model(src=input_ids)
+                elif model.model_type == 'decoder_only':
+                    print("Forwarding through original decoder-only model")
+                    _ = model(tgt=input_ids)
+                elif model.model_type == 'encoder_decoder':
+                    _ = model(src=input_ids, tgt=input_ids)
+            except Exception as e:
+                print(f"Error during forward pass: {e}")
+                continue
+
+    # Clean up hooks
+    for handle in handles:
+        handle.remove()
+
+    # Concatenate results
+    hidden_states = {}
+    for key, states_list in hidden_dict.items():
+        if states_list:
+            hidden_states[key] = torch.cat(states_list, dim=0)
+
+    # Concatenate labels if available
+    final_pos_labels = torch.cat(pos_labels, dim=0) if pos_labels else None
+    final_semantic_labels = torch.cat(semantic_labels, dim=0) if semantic_labels else None
+
+    return hidden_states, final_pos_labels, final_semantic_labels
