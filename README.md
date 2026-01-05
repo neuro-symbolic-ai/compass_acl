@@ -928,3 +928,5 @@ This generates synthetic corpora optimized for transformer analysis with control
 ##  License
 
 This project is licensed under the  licensed under the GPLv3 License - see the [LICENSE](LICENSE) file for details.
+
+# The code heavily leverages open-source libraries including PyTorch, NumPy, SciPy, scikit-learn, Matplotlib, and EAP-IG. Please refer to the LICENSE file for full details on third-party licenses.
