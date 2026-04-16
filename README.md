@@ -50,7 +50,7 @@ A comprehensive Python package for analyzing transformer models during training.
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/neuro-symbolic-ai/compass_acl
 cd compass_acl
 ```
 
@@ -88,6 +88,7 @@ conda activate trace
 
 ```python
 # Create tokenizer from your corpus
+import torch
 from trace.tokenizer import create_tokenizer_from_data
 
 CORPUS_PATH = "./data/corpus.json"  # Your ABSynth data - sample data path
@@ -107,7 +108,7 @@ model_config = TransformerConfig(
     d_ff=2048,  # Feed-forward dimension
     n_ctx=128,  # Maximum sequence length
     dropout=0.1,
-    device="cpu"  # "cpu" or "cuda"
+    device=torch.device('cpu')  # "cpu" or "cuda"
 )
 
 model = Transformer.from_config(model_config)
