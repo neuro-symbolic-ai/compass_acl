@@ -1,35 +1,88 @@
-# TRACE: Tracking Representation Abstraction and Compositional Emergence
+# COMPASS
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![arXiv](https://img.shields.io/badge/arXiv-2511.20910-b31b1b.svg)](https://arxiv.org/abs/2511.20910)
 
-**TRACE** is a comprehensive Python package for analyzing transformer models during training. It provides modular tools for understanding model behavior through linguistic probes, intrinsic dimension analysis, Hessian landscape exploration, and more.
+**COMPASS** is the companion codebase for the paper:
 
-**Model Compatibility**: TRACE automatically works with both **original transformer implementations** and **HookedTransformer models** from [TransformerLens](https://github.com/TransformerLensOrg/TransformerLens). The package automatically detects your model type and adapts its analysis methods accordingly.
+> **Emergence and Localisation of Semantic Role Circuits in LLMs**
+> Nura Aljaafari, Danilo S. Carvalho, André Freitas
+> [[arXiv:2511.20910]](https://arxiv.org/abs/2511.20910)
 
-**Note**: TRACE is designed to work with synthetic data from the [anonymised], which provides controlled linguistic structures for systematic analysis of transformer learning dynamics.
+A comprehensive Python package for analyzing transformer models during training. It provides modular tools for understanding model behavior through linguistic probes, intrinsic dimension analysis, Hessian landscape exploration, circuit discovery (EAP), and a semantic knowledge base for mechanistic interpretability (MechInt-DB).
+
+**Model Compatibility**: COMPASS automatically works with both **original transformer implementations** and **HookedTransformer models** from [TransformerLens](https://github.com/TransformerLensOrg/TransformerLens). The package automatically detects your model type and adapts its analysis methods accordingly.
+
+**Note**: COMPASS is designed to work with synthetic data from [ABSynth](https://github.com/), which provides controlled linguistic structures for systematic analysis of transformer learning dynamics.
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Basic Usage](#basic-usage)
+- [Transformer Model Creation](#transformer-model-creation)
+- [Intrinsic Dimensions Analysis](#intrinsic-dimensions-analysis)
+- [Hessian Analysis](#hessian-analysis)
+- [Linguistic Probes](#linguistic-probes)
+- [Output Monitoring](#output-monitoring)
+- [MechInt-DB: Mechanistic Interpretability Knowledge Base](#mechint-db-mechanistic-interpretability-knowledge-base)
+- [Working with ABSynth Data](#working-with-absynth-data)
+- [Creating Your Own ABSynth Dataset](#creating-your-own-absynth-dataset)
+- [Citation](#citation)
+- [Contact](#contact)
+- [License](#license)
 
 ## Features
 
 - **Dual Model Support**: Seamlessly works with both original transformers and TransformerLens HookedTransformer models
 - **Linguistic Probes**: Monitor syntactic and semantic understanding across layers
-- **Intrinsic Dimensions**: Track representation complexity using TwoNN and other methods  
+- **Intrinsic Dimensions**: Track representation complexity using TwoNN and other methods
 - **Hessian Analysis**: Explore loss landscapes, sharpness, and training dynamics
+- **Circuit Discovery (EAP)**: Edge Attribution Patching for identifying semantic role circuits
+- **MechInt-DB**: Semantic knowledge base for storing, querying, and tracking circuit evolution via OWL/RDF ontologies
 - **Real-time Monitoring**: Comprehensive visualization during training
 - **Modular Design**: Use individual components or full training integration
 - **Easy Integration**: Drop-in replacement for existing training loops
-- **Automatic Detection**: No configuration needed - TRACE detects your model type automatically
+- **Automatic Detection**: No configuration needed - COMPASS detects your model type automatically
 
 
 ## Installation
 
-
 ```bash
 # Clone the repository
-# anonymous clone
-git clone
-
-
+git clone <repository-url>
+cd compass_acl
 ```
+
+### Conda Environment Setup
+
+```bash
+# Create the environment from the provided file
+conda env create -f environment.yml
+
+# Activate the environment
+conda activate trace
+```
+
+### Requirements Summary
+
+| Package | Purpose |
+|---------|---------|
+| `torch` | Deep learning framework |
+| `transformer-lens` | Hooked transformer models (TransformerLens) |
+| `transformers` | Hugging Face tokenizers & model integration |
+| `numpy` | Numerical computing |
+| `scipy` | Scientific computing (eigenvalue analysis) |
+| `scikit-learn` | Data splitting utilities |
+| `pandas` | Data analysis & export |
+| `matplotlib` | Visualization & plotting |
+| `networkx` | Graph operations (EAP analysis) |
+| `rdflib` | RDF/OWL ontology handling |
+| `skdim` | Intrinsic dimension estimation |
+| `einops` | Tensor reshaping operations |
+| `jaxtyping` | Tensor shape type annotations |
+| `tqdm` | Progress bars |
+| `pygraphviz` | Advanced graph visualization *(optional)* |
 
 ### Basic Usage
 
@@ -129,7 +182,7 @@ best_loss, analysis_results = trainer.train(
 # Using Individual Analysis Modules
 ## Transformer Model Creation
 
-TRACE provides a flexible transformer implementation supporting multiple architectures with consistent configuration patterns.
+COMPASS provides a flexible transformer implementation supporting multiple architectures with consistent configuration patterns.
 
 ### Supported Architectures
 
@@ -240,7 +293,7 @@ print(f"Output shape: {logits.shape}")  # [2, 10, 32128]
 
 ## Intrinsic Dimensions Analysis
 
-TRACE provides comprehensive tools for analyzing the intrinsic dimensionality of transformer representations using advanced geometric methods. This helps understand how models compress and organize information across layers.
+COMPASS provides comprehensive tools for analyzing the intrinsic dimensionality of transformer representations using advanced geometric methods. This helps understand how models compress and organize information across layers.
 
 ### Supported Methods
 
@@ -335,7 +388,7 @@ visualizer.save_metrics(intrinsic_dims, "my_model")
 
 ## Hessian Analysis
 
-TRACE provides comprehensive Hessian analysis capabilities for understanding loss landscape properties, training dynamics, and memorization patterns. This module analyzes curvature information to reveal insights about model optimization and generalization.
+COMPASS provides comprehensive Hessian analysis capabilities for understanding loss landscape properties, training dynamics, and memorization patterns. This module analyzes curvature information to reveal insights about model optimization and generalization.
 
 ### Key Features
 
@@ -493,7 +546,7 @@ visualizer.plot_memorization_metrics(hessian_history, model_name="my_transformer
 
 ## Linguistic Probes
 
-TRACE provides linguistic probing capabilities to analyze what linguistic knowledge models acquire during training. This module includes both probe training infrastructure and real-time monitoring systems for tracking linguistic understanding.
+COMPASS provides linguistic probing capabilities to analyze what linguistic knowledge models acquire during training. This module includes both probe training infrastructure and real-time monitoring systems for tracking linguistic understanding.
 
 ### Key Features
 
@@ -648,7 +701,7 @@ def training_step_with_linguistic_monitoring(model, batch, step):
 
 ### Linguistic Taggers
 
-TRACE includes sophisticated rule-based taggers for synthetic data:
+COMPASS includes sophisticated rule-based taggers for synthetic data:
 
 ```python
 from trace.linguistic_probes import POSTagger, SemanticTagger
@@ -746,7 +799,7 @@ visualizer.plot_probe_confidence_analysis(
 
 ## Output Monitoring
 
-TRACE's Output Monitoring module provides real-time analysis of model output quality by tracking linguistic accuracy across different grammatical and semantic categories during training. 
+COMPASS's Output Monitoring module provides real-time analysis of model output quality by tracking linguistic accuracy across different grammatical and semantic categories during training. 
 
 ### Key Features
 - **POS Accuracy Tracking**: Track part-of-speech accuracy by category (nouns, verbs, adjectives, etc.)
@@ -851,6 +904,102 @@ output_visualizer.save_metrics(
 )
 ```
 
+## MechInt-DB: Mechanistic Interpretability Knowledge Base
+
+COMPASS includes **MechInt-DB**, a semantic database layer for storing, querying, and tracking transformer circuit structures discovered through mechanistic interpretability analysis. It converts EAP circuit analysis results into structured OWL/RDF knowledge graphs.
+
+### Key Features
+
+- **OWL/RDF Export**: Persist discovered circuits as semantic knowledge graphs in Turtle format
+- **MechInt Ontology**: Comprehensive ontology modeling transformer components (attention heads, MLPs, residual streams), circuit edges, semantic roles, and interventions
+- **Temporal Evolution Tracking**: Track how circuits change across training steps
+- **EAP Integration**: Seamless integration with Edge Attribution Patching analysis
+- **Performance Metrics**: Store faithfulness scores, ablation results, and circuit statistics alongside circuit structure
+
+### Basic Usage
+
+```python
+from mechint_db.integration import MechIntEAPConfig, MechIntEAPAnalyzer
+
+# Configure EAP analysis with OWL export
+config = MechIntEAPConfig(
+    method="EAP-IG",
+    top_k=28,
+    ig_steps=5,
+    save_owl=True,                          # Enable OWL/RDF export
+    owl_output_dir="./circuit_ontologies",  # Output directory
+    experiment_description="Semantic role circuit analysis",
+    researcher_name="Your Name"
+)
+
+# Initialize analyzer
+analyzer = MechIntEAPAnalyzer(config)
+
+# Run analysis with automatic OWL export
+results, graph = analyzer.analyze(
+    model=hooked_model,
+    batch_loader=data_loader,
+    tokenizer=tokenizer,
+    model_name="my_transformer",
+    step=1000,
+    experiment_id="semantic_roles_exp1"
+)
+
+# Access results
+print(f"Faithfulness: {results['faithfulness']:.4f}")
+print(f"Circuit edges: {results['num_edges_in_circuit']}")
+```
+
+### Quick Analysis with Export
+
+```python
+from mechint_db.integration import analyze_with_owl_export
+
+# One-shot function for running EAP + OWL export
+results, graph, owl_path = analyze_with_owl_export(
+    model=hooked_model,
+    cnp_dataset_path="./data/minimal_pairs.json",
+    experiment_id="semantic_roles_exp1",
+    step=1000,
+    method="EAP-IG",
+    top_k=28,
+    tokenizer=tokenizer
+)
+
+print(f"Circuit saved to: {owl_path}")
+```
+
+### Temporal Circuit Evolution
+
+```python
+# Track circuit evolution across training
+analyzer.export_temporal_evolution(
+    experiment_results=all_step_results,  # Dict of {step: (results, graph)}
+    experiment_id="semantic_roles_exp1"
+)
+# Outputs: evolution.ttl with snapshots and change tracking
+```
+
+### Ontology Structure
+
+The MechInt ontology models:
+- **Transformer Components**: `AttnHead`, `MLP`, `LayerNorm`, `Residual`, `Embed`
+- **Circuit Structure**: `Circuit`, `CircuitEdge`, `CircuitNode` with scores, ranks, and edge types (Q/K/V/OV/Flow)
+- **Semantic Concepts**: `SemanticRole`, `SemanticRule` linking circuits to linguistic function
+- **Temporal Evolution**: `CircuitEvolution`, `CircuitChange` for tracking structural changes over training
+- **Experiments**: `Experiment`, `Run`, `Checkpoint` for reproducibility
+
+Output is stored as Turtle (`.ttl`) files organized by experiment:
+```
+circuit_ontologies/
+└── semantic_roles_exp1/
+    └── circuits/
+        ├── step_0.ttl
+        ├── step_500.ttl
+        ├── step_1000.ttl
+        └── evolution.ttl
+```
+
 ## Working with ABSynth Data
 
 ### Understanding ABSynth Structure
@@ -889,8 +1038,8 @@ generator = SyntheticCorpusGenerator()
 corpus = generator.generate_corpus(num_sentences=1000)
 corpus.save("my_absynth_corpus.json")
 
-# Now use with TRACE
-CORPUS_PATH = "my_absynth_corpus.json"  # Use in your TRACE pipeline
+# Now use with COMPASS
+CORPUS_PATH = "my_absynth_corpus.json"  # Use in your analysis pipeline
 ```
 
 ### Custom Configuration (Optional)
@@ -917,16 +1066,33 @@ corpus = generator.generate_corpus(
     }
 )
 
-# Save in format compatible with TRACE
+# Save in format compatible with COMPASS analysis
 corpus.save("./data/custom_absynth_corpus.json", indent=2)
 ```
 
-This generates synthetic corpora optimized for transformer analysis with controlled linguistic properties, semantic annotations, and statistical characteristics ideal for TRACE's analysis modules.
+This generates synthetic corpora optimized for transformer analysis with controlled linguistic properties, semantic annotations, and statistical characteristics ideal for COMPASS's analysis modules.
 
 
 
-##  License
+## Citation
 
-This project is licensed under the  licensed under the GPLv3 License - see the [LICENSE](LICENSE) file for details.
+If you use COMPASS in your research, please cite:
 
-# The code heavily leverages open-source libraries including PyTorch, NumPy, SciPy, scikit-learn, Matplotlib, and EAP-IG. Please refer to the LICENSE file for full details on third-party licenses.
+```bibtex
+@article{aljaafari2025emergence,
+  title={Emergence and Localisation of Semantic Role Circuits in LLMs},
+  author={Aljaafari, Nura and Carvalho, Danilo S. and Freitas, Andr{\'e}},
+  journal={arXiv preprint arXiv:2511.20910},
+  year={2025}
+}
+```
+
+## Contact
+
+For questions or feedback, please reach out at: nuraaljaafari@gmail.com
+
+## License
+
+This project is licensed under the GPLv3 License - see the [LICENSE](LICENSE) file for details.
+
+The code heavily leverages open-source libraries including PyTorch, NumPy, SciPy, scikit-learn, Matplotlib, and EAP-IG (base code). Please refer to the LICENSE file for full details on third-party licenses.
