@@ -7,7 +7,7 @@
 
 > **Emergence and Localisation of Semantic Role Circuits in LLMs**
 > Nura Aljaafari, Danilo S. Carvalho, André Freitas
-> [[arXiv:2511.20910]](https://arxiv.org/abs/2511.20910)
+> [[arXiv:2511.20910]](https://aclanthology.org/2026.findings-acl.1964/
 
 A comprehensive Python package for analyzing transformer models during training. It provides modular tools for understanding model behavior through linguistic probes, intrinsic dimension analysis, Hessian landscape exploration, circuit discovery (EAP), and a semantic knowledge base for mechanistic interpretability (MechInt-DB).
 
@@ -1080,11 +1080,25 @@ This generates synthetic corpora optimized for transformer analysis with control
 If you use COMPASS in your research, please cite:
 
 ```bibtex
-@article{aljaafari2025emergence,
-  title={Emergence and Localisation of Semantic Role Circuits in LLMs},
-  author={Aljaafari, Nura and Carvalho, Danilo S. and Freitas, Andr{\'e}},
-  journal={arXiv preprint arXiv:2511.20910},
-  year={2025}
+@inproceedings{aljaafari-etal-2026-emergence,
+    title = "Emergence and Localisation of Semantic Role Circuits in {LLM}s",
+    author = "Aljaafari, Nura  and
+      Carvalho, Danilo  and
+      Freitas, Andre",
+    editor = "Liakata, Maria  and
+      Moreira, Viviane P.  and
+      Zhang, Jiajun  and
+      Jurgens, David",
+    booktitle = "Findings of the {A}ssociation for {C}omputational {L}inguistics: {ACL} 2026",
+    month = jul,
+    year = "2026",
+    address = "San Diego, California, United States",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2026.findings-acl.1964/",
+    doi = "10.18653/v1/2026.findings-acl.1964",
+    pages = "39402--39433",
+    ISBN = "979-8-89176-395-1",
+    abstract = "Despite displaying semantic competence, large language models' internal mechanisms that ground abstract semantic structure remain insufficiently characterised. To investigate whether and how LLMs develop causally functional representations of semantic roles, we introduce a causal-temporal methodology combining contrastive minimal pairs, edge-attribution circuit discovery, and training-time tracking. Our analysis reveals that LLMs encode semantic roles through highly localised circuits (89{--}92{\%} attribution within 28 nodes) that emerge gradually via structural refinement rather than phase transitions. These circuits exhibit moderate cross-scale conservation (24{--}51{\%} component overlap) alongside high spectral similarity, with larger models reusing similar components while rewiring connections. These findings suggest that LLMs form compact, causally isolated mechanisms for abstract semantic structure that exhibit partial transfer across scales and architectures."
 }
 ```
 
