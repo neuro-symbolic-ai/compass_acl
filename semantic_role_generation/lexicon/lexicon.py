@@ -65,23 +65,18 @@ class Lexicon:
 
     # ---- role inventories ----
     def scaffolds(self, role: str) -> List[str]:
-        if role == "Time" and self.config.time_markers == "2token":
-            return list(R.TIME_SCAFFOLDS_2TOKEN)
-        return list(R.SCAFFOLDS[role])
+        return list(self._variant(R.SCAFFOLDS, R.SCAFFOLDS_2TOKEN, role))
 
     def scaffold_token_length(self, role: str) -> int:
-        """Token length shared by a role's scaffolds (1 for paper-setting Time, else 2)."""
-        return 1 if (role == "Time" and self.config.time_markers == "1token") else 2
+        """Word count shared by a role's scaffolds in the active marker family."""
+        return len(self.scaffolds(role)[0].split())
 
     def cue_swap_roles(self, role: str) -> List[str]:
-        if role == "Time" and self.config.time_markers == "2token":
-            return list(R.TIME_CUE_SWAP_2TOKEN)
-        return list(R.ROLE_CUE_SWAP[role])
+        return list(self._variant(R.ROLE_CUE_SWAP, R.ROLE_CUE_SWAP_2TOKEN, role))
 
     def verbs(self, role: str) -> List[str]:
-        if role == "Time" and self.config.time_markers == "2token":
-            return list(R.TIME_VERBS_2TOKEN)
-        return list(R.VERBS[R.FRAME[role]])
+        base = {role: R.VERBS[R.FRAME[role]]}
+        return list(self._variant(base, R.VERBS_2TOKEN, role))
 
     def frame(self, role: str) -> str:
         return R.FRAME[role]
@@ -100,9 +95,13 @@ class Lexicon:
 
     # ---- helpers ----
     def _raw_heads(self, role: str) -> List[str]:
-        if role == "Time" and self.config.time_markers == "2token":
-            return W.TIME_HEADS_2TOKEN
-        return W.HEADS[role]
+        return self._variant(W.HEADS, W.HEADS_2TOKEN, role)
+
+    def _variant(self, base: Dict[str, List[str]], overrides: Dict[str, List[str]], role: str):
+        """Pick the role's entry for the active scaffold-marker family."""
+        if self.config.scaffold_markers == "2token" and role in overrides:
+            return overrides[role]
+        return base[role]
 
     def _filter(self, words: List[str]) -> List[str]:
         if not self.config.single_token_only:

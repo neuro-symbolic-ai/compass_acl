@@ -13,9 +13,8 @@ ROLES: List[str] = [
     "Material", "Path", "Beneficiary", "Manner", "Time",
 ]
 
-# Scaffolds per role. Time has two inventories: the one-token family used in
-# the paper (at / on) and a two-token family that lets Time swap with the
-# other roles. GenerationConfig.time_markers selects between them.
+# Scaffolds per role, for the "1token" marker family used in the paper.
+# Only Time has one-token scaffolds (at / on); the other roles are two-token.
 SCAFFOLDS: Dict[str, List[str]] = {
     "Goal":        ["to the", "for the"],
     "Location":    ["in the", "at the", "near the", "inside the"],
@@ -28,10 +27,11 @@ SCAFFOLDS: Dict[str, List[str]] = {
     "Manner":      ["with the"],
     "Time":        ["at", "on"],
 }
-TIME_SCAFFOLDS_2TOKEN: List[str] = ["at the", "on the", "during the", "before the", "after the"]
 
 # Role-cue corruption: for a target role, the roles whose scaffold can replace
 # the clean scaffold. Only same-parity swaps are attempted at generation time.
+# Time maps to itself because no other role has one-token scaffolds, so its
+# corruption is at <-> on. ROLE_CUE_SWAP_2TOKEN fixes that restriction.
 ROLE_CUE_SWAP: Dict[str, List[str]] = {
     "Goal":        ["Location", "Topic", "Beneficiary"],
     "Location":    ["Source", "Goal", "Instrument", "Path"],
@@ -44,7 +44,16 @@ ROLE_CUE_SWAP: Dict[str, List[str]] = {
     "Manner":      ["Instrument"],
     "Time":        ["Time"],
 }
-TIME_CUE_SWAP_2TOKEN: List[str] = ["Location", "Goal"]
+
+# Overrides for the "2token" marker family (LexiconConfig.scaffold_markers).
+# Roles absent from these dicts keep the entries above. Any role can be given
+# an alternative inventory here; at present only Time differs.
+SCAFFOLDS_2TOKEN: Dict[str, List[str]] = {
+    "Time": ["at the", "on the", "during the", "before the", "after the"],
+}
+ROLE_CUE_SWAP_2TOKEN: Dict[str, List[str]] = {
+    "Time": ["Location", "Goal"],
+}
 
 # Verb inventories by semantic frame.
 VERBS: Dict[str, List[str]] = {
@@ -59,7 +68,10 @@ VERBS: Dict[str, List[str]] = {
     "basic_intransitive_time":  ["arrived", "started", "stayed", "worked"],
     "manner_with_nominal":      ["handled", "solved", "worked", "spoke"],
 }
-TIME_VERBS_2TOKEN: List[str] = ["arrived", "started", "ended", "worked", "stayed", "met", "left", "waited"]
+# Verb overrides for the "2token" family, keyed by role.
+VERBS_2TOKEN: Dict[str, List[str]] = {
+    "Time": ["arrived", "started", "ended", "worked", "stayed", "met", "left", "waited"],
+}
 
 # Semantic frame used by each target role.
 FRAME: Dict[str, str] = {

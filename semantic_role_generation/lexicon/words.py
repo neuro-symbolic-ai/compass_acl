@@ -41,11 +41,12 @@ HEADS: Dict[str, List[str]] = {
     "Time":        ["morning", "noon", "evening", "night", "midnight", "dawn", "dusk",
                     "monday", "friday", "saturday"],
 }
-# Time heads that read naturally after the two-token scaffolds ("at the", "during the").
-TIME_HEADS_2TOKEN: List[str] = [
-    "start", "end", "break", "shift", "weekend", "holiday", "meeting", "deadline",
-    "summer", "winter", "fall", "spring"
-]
+# Head overrides for the "2token" scaffold family, keyed by role. Time heads
+# here read naturally after "at the" / "during the".
+HEADS_2TOKEN: Dict[str, List[str]] = {
+    "Time": ["start", "end", "break", "shift", "weekend", "holiday", "meeting", "deadline",
+             "summer", "winter"],
+}
 
 # Optional modifiers for surface variation.
 ADVERBS: List[str] = ["quietly", "quickly", "carefully", "slowly", "calmly", "briefly", "softly"]
