@@ -1,6 +1,5 @@
 import torch
-import json
-from typing import Dict, List, Any
+from typing import Dict, List
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -63,6 +62,12 @@ def cnp_metric(logits: torch.Tensor, clean_logits: torch.Tensor,
                input_length: torch.Tensor, labels: torch.Tensor,
                mean=True, loss=False):
     """CNP metric for EAP analysis"""
+    """Log-probability gap between the correct and the alternative label.
+
+        For each example, the logits at the last input position give
+        log P(correct) - log P(alternative). With loss=True the sign is flipped
+        so the value can be minimised; with mean=True it is averaged over the batch.
+    """
     batch_size = logits.size(0)
     idx = torch.arange(batch_size, device=logits.device)
     target_logits = logits[idx, input_length - 1]
@@ -70,7 +75,8 @@ def cnp_metric(logits: torch.Tensor, clean_logits: torch.Tensor,
     log_probs = torch.log_softmax(target_logits, dim=-1)
     # print(f'Type of logits: {(logits.dtype)}')
     # print(f'Type of labels1: {(labels.dtype)}')
-    labels = torch.tensor(labels, dtype=torch.long, device=logits.device)
+    # labels = torch.tensor(labels, dtype=torch.long, device=logits.device)
+    labels = torch.as_tensor(labels, dtype=torch.long, device=logits.device)
     # print(f'Type of labels2: {(labels.dtype)}')
     # print(f'Labels: {labels.device}')
     # target_probs = torch.gather(log_probs, -1, labels.to(logits.device))
