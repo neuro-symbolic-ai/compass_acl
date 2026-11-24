@@ -1,120 +1,68 @@
-# COMPASS
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+# Emergence and Localisation of Semantic Role Circuits in LLMs
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![arXiv](https://img.shields.io/badge/arXiv-2511.20910-b31b1b.svg)](https://arxiv.org/abs/2511.20910)
 
-**COMPASS** is the companion codebase for the paper:
+This repository contains the code for the paper "Emergence and Localisation of Semantic Role Circuits in LLMs" (Findings of ACL 2026).
 
-> **Emergence and Localisation of Semantic Role Circuits in LLMs**
-> Nura Aljaafari, Danilo S. Carvalho, André Freitas
-> [[arXiv:2511.20910]](https://aclanthology.org/2026.findings-acl.1964/
+## Overview
 
-A comprehensive Python package for analyzing transformer models during training. It provides modular tools for understanding model behavior through linguistic probes, intrinsic dimension analysis, Hessian landscape exploration, circuit discovery (EAP), and a semantic knowledge base for mechanistic interpretability (MechInt-DB).
+**COMPASS** is a causal-temporal methodology for studying how language models come to represent semantic roles. It combines contrastive minimal pairs, circuit discovery with edge attribution patching and integrated gradients (EAP-IG), and tracking across training checkpoints.
 
-**Model Compatibility**: COMPASS automatically works with both **original transformer implementations** and **HookedTransformer models** from [TransformerLens](https://github.com/TransformerLensOrg/TransformerLens). The package automatically detects your model type and adapts its analysis methods accordingly.
+1. **Data framework:** each clean prompt is paired with a corrupt prompt that changes the semantic role marker; the metric is the log-probability gap between them.
+2. **EAP-IG edge scoring:** activations from clean and corrupt runs are combined with gradients averaged along the input path from corrupt to clean, giving a score for every edge.
+3. **Temporal tracking:** the analysis is repeated at training checkpoints.
+4. **Validation:** circuits are evaluated by faithfulness and by their overlap across checkpoints.
 
-**Note**: COMPASS is designed to work with synthetic data from [ABSynth](https://github.com/), which provides controlled linguistic structures for systematic analysis of transformer learning dynamics.
+![Animation of the COMPASS method](compass_method.gif)
 
-## Table of Contents
+The code works with the repository's own transformer implementation and with TransformerLens `HookedTransformer` models, and is designed for synthetic corpora generated with ABSynth. Alongside circuit discovery, it provides analysis modules for linguistic probes, intrinsic dimensions, Hessian spectra and output monitoring, and MechInt-DB, which stores circuits as OWL/RDF knowledge graphs.
 
-- [Features](#features)
-- [Installation](#installation)
-- [Basic Usage](#basic-usage)
-- [Transformer Model Creation](#transformer-model-creation)
-- [Intrinsic Dimensions Analysis](#intrinsic-dimensions-analysis)
-- [Hessian Analysis](#hessian-analysis)
-- [Linguistic Probes](#linguistic-probes)
-- [Output Monitoring](#output-monitoring)
-- [MechInt-DB: Mechanistic Interpretability Knowledge Base](#mechint-db-mechanistic-interpretability-knowledge-base)
-- [Working with ABSynth Data](#working-with-absynth-data)
-- [Creating Your Own ABSynth Dataset](#creating-your-own-absynth-dataset)
-- [Citation](#citation)
-- [Contact](#contact)
-- [License](#license)
+## Setup
 
-## Features
-
-- **Dual Model Support**: Seamlessly works with both original transformers and TransformerLens HookedTransformer models
-- **Linguistic Probes**: Monitor syntactic and semantic understanding across layers
-- **Intrinsic Dimensions**: Track representation complexity using TwoNN and other methods
-- **Hessian Analysis**: Explore loss landscapes, sharpness, and training dynamics
-- **Circuit Discovery (EAP)**: Edge Attribution Patching for identifying semantic role circuits
-- **MechInt-DB**: Semantic knowledge base for storing, querying, and tracking circuit evolution via OWL/RDF ontologies
-- **Real-time Monitoring**: Comprehensive visualization during training
-- **Modular Design**: Use individual components or full training integration
-- **Easy Integration**: Drop-in replacement for existing training loops
-- **Automatic Detection**: No configuration needed - COMPASS detects your model type automatically
-
-
-## Installation
+Use the provided `environment.yml` with Python 3.11. From the repository root:
 
 ```bash
-# Clone the repository
-git clone https://github.com/neuro-symbolic-ai/compass_acl
-cd compass_acl
-```
-
-### Conda Environment Setup
-
-```bash
-# Create the environment from the provided file
 conda env create -f environment.yml
-
-# Activate the environment
-conda activate trace
+conda activate compass
 ```
 
-### Requirements Summary
+The environment installs Graphviz from conda-forge, which is needed to draw circuit graphs. Alternatively, install Graphviz on your system and use pip:
 
-| Package | Purpose |
-|---------|---------|
-| `torch` | Deep learning framework |
-| `transformer-lens` | Hooked transformer models (TransformerLens) |
-| `transformers` | Hugging Face tokenizers & model integration |
-| `numpy` | Numerical computing |
-| `scipy` | Scientific computing (eigenvalue analysis) |
-| `scikit-learn` | Data splitting utilities |
-| `pandas` | Data analysis & export |
-| `matplotlib` | Visualization & plotting |
-| `networkx` | Graph operations (EAP analysis) |
-| `rdflib` | RDF/OWL ontology handling |
-| `skdim` | Intrinsic dimension estimation |
-| `einops` | Tensor reshaping operations |
-| `jaxtyping` | Tensor shape type annotations |
-| `tqdm` | Progress bars |
-| `pygraphviz` | Advanced graph visualization *(optional)* |
+```bash
+pip install -r requirements.txt
+pip install pygraphviz==1.14
+```
 
-### Basic Usage
+## Usage
+
+Run all commands and scripts from the repository root so that the `eap`, `trace` and `mechint_db` packages can be imported.
+
+The example below trains a small decoder-only model on an ABSynth corpus and discovers semantic-role circuits with EAP-IG at regular checkpoints.
 
 ```python
-# Create tokenizer from your corpus
 import torch
+
+from trace.dataloader import get_dataloader
 from trace.tokenizer import create_tokenizer_from_data
-
-CORPUS_PATH = "./data/corpus.json"  # Your ABSynth data - sample data path
-tokenizer = create_tokenizer_from_data(
-    vocab_file=CORPUS_PATH)  # alternatively, use from_pretrained(vocab_file=VOCAB_file) to load from a pre-existing tokenizer file
-VOCAB_SIZE = tokenizer.get_vocab_size()
-
-# Create transformer model
+from trace.training import Trainer, TrainingConfig
 from trace.transformer import Transformer, TransformerConfig
 
-model_config = TransformerConfig(
-    model_type="decoder_only",  # "encoder_only", "decoder_only", "encoder_decoder"
-    vocab_size=VOCAB_SIZE,
-    d_model=512,  # Hidden dimension
-    n_heads=8,  # Attention heads
-    num_decoder_layers=2,  # Number of layers
-    d_ff=2048,  # Feed-forward dimension
-    n_ctx=128,  # Maximum sequence length
+CORPUS_PATH = "./data/corpus.json"           # ABSynth corpus
+CNP_PATH = "./data/minimal_pairs.json"       # clean/corrupt minimal pairs
+
+tokenizer = create_tokenizer_from_data(vocab_file=CORPUS_PATH)
+
+model = Transformer.from_config(TransformerConfig(
+    model_type="decoder_only",
+    vocab_size=tokenizer.get_vocab_size(),
+    d_model=512,
+    n_heads=8,
+    num_decoder_layers=2,
+    d_ff=2048,
+    n_ctx=128,
     dropout=0.1,
-    device=torch.device('cpu')  # "cpu" or "cuda"
-)
-
-model = Transformer.from_config(model_config)
-
-# Create data loaders
-from trace.dataloader import get_dataloader
+    device=torch.device("cpu"),
+))
 
 train_loader, val_loader, test_loader = get_dataloader(
     corpus_path=CORPUS_PATH,
@@ -123,961 +71,101 @@ train_loader, val_loader, test_loader = get_dataloader(
     max_length=128,
     model_type="decoder_only",
     val_split=0.1,
-    test_split=0.1
+    test_split=0.1,
 )
 
-# Configure comprehensive training analysis
-from trace.training import Trainer, TrainingConfig
-
-# Optional: Load pre-trained probes for analysis.
-# If not provided, probes are randomly initialized and trained during analysis.
-probe_paths = {
-    (0, 'decoder'): './probes/pos_layer0_decoder.pt',
-    (1, 'decoder'): './probes/pos_layer1_decoder.pt',
-}
-
-semantic_probe_paths = {
-    (0, 'decoder'): './probes/semantic_layer0_decoder.pt',
-    (1, 'decoder'): './probes/semantic_layer1_decoder.pt',
-}
-
-training_config = TrainingConfig(
-    # Training parameters
+config = TrainingConfig(
     epochs=30,
     learning_rate=1e-3,
     batch_size=128,
     device="cuda",
-
-    # Analysis modules (enable all)
-    track_hessian=False,  # Loss landscape analysis
-    track_linguistic_probes=False,  # POS understanding  
-    track_semantic_probes=False,  # Semantic role understanding
-    track_intrinsic_dimensions=False,  # Representation dimensionality
-    track_pos_performance=False,  # Output POS accuracy
-    track_semantic_roles_performance=False,  # Output semantic accuracy
-    probe_load_paths=probe_paths,
-    semantic_probe_load_path=semantic_probe_paths,
-
-    # Analysis frequency and visualization
-    track_interval=500,  # Analyze every 500 steps
-    save_visualization=True,  # Generate plots
-    plots_path="./analysis_results"  # Save results here
+    track_interval=500,                 # analyse every 500 steps
+    track_eap=True,
+    eap_method="EAP-IG-inputs",
+    eap_ig_steps=5,
+    eap_top_k=28,
+    cnp_dataset_path=CNP_PATH,
+    plots_path="./analysis_results",
 )
 
-# Train with comprehensive analysis
-trainer = Trainer(training_config, tokenizer, model)
+trainer = Trainer(config, tokenizer, model)
 best_loss, analysis_results = trainer.train(
     train_loader=train_loader,
     val_loader=val_loader,
     test_loader=test_loader,
 )
-
-# Results automatically saved to ./analysis_results/ with:
-# - Hessian eigenvalue evolution plots
-# - Linguistic probe confidence tracking  
-# - Intrinsic dimension evolution
-# - Output quality monitoring
-# - Training loss curves and metrics
 ```
 
-# Using Individual Analysis Modules
-## Transformer Model Creation
+The minimal-pair file is a JSON or CSV table with the columns `clean`, `corrupted`, `correct_idx` and `incorrect_idx`.
 
-COMPASS provides a flexible transformer implementation supporting multiple architectures with consistent configuration patterns.
+### Training arguments
 
-### Supported Architectures
+| Argument | Purpose |
+| --- | --- |
+| `track_interval` | Number of training steps between analyses. |
+| `track_eap` | Run circuit discovery at each analysis step. |
+| `eap_method` | `EAP`, `EAP-IG-inputs`, `EAP-IG-activations`, or `clean-corrupted`. The default is `EAP`. |
+| `eap_ig_steps` | Number of integrated-gradient steps `m` (default: `5`). |
+| `eap_top_k` | Number of highest-scoring edges kept in the circuit (default: `50`). |
+| `cnp_dataset_path` | Path to the minimal-pair dataset. |
+| `enable_owl_export` | Also export each circuit to MechInt-DB as Turtle files. |
+| `track_linguistic_probes` / `track_semantic_probes` | Track POS and semantic-role probes. |
+| `track_intrinsic_dimensions` | Track the intrinsic dimension of hidden representations. |
+| `track_hessian` | Track Hessian eigenvalues of the loss. |
+| `track_pos_performance` / `track_semantic_roles_performance` | Track output accuracy by POS and semantic-role category. |
+| `plots_path` | Folder for plots and analysis histories. |
 
-- **Encoder-Only**
-- **Decoder-Only**
-- **Encoder-Decoder**
+### Analysis modules
 
-### Configuration System
+Each module can also be used on its own. Usage guides are in `docs/`:
 
-```python
-from trace.transformer import Transformer, TransformerConfig
-import torch
+| Module | Import | Guide |
+| --- | --- | --- |
+| Transformer models | `trace.transformer` | [docs/transformer_models.md](docs/transformer_models.md) |
+| Intrinsic dimensions | `trace.intrisic_dimensions` | [docs/intrinsic_dimensions.md](docs/intrinsic_dimensions.md) |
+| Hessian analysis | `trace.hessian` | [docs/hessian_analysis.md](docs/hessian_analysis.md) |
+| Linguistic probes | `trace.linguistic_probes` | [docs/linguistic_probes.md](docs/linguistic_probes.md) |
+| Output monitoring | `trace.output_monitoring` | [docs/output_monitoring.md](docs/output_monitoring.md) |
+| MechInt-DB | `mechint_db.integration` | [docs/mechint_db.md](docs/mechint_db.md) |
+| ABSynth data | `trace.tokenizer`, `trace.dataloader` | [docs/absynth_data.md](docs/absynth_data.md) |
 
-# All models use the same configuration class
-config = TransformerConfig(
-    model_type="decoder_only",  # Architecture type
-    vocab_size=30522,  # Vocabulary size
-    d_model=768,  # Model dimension
-    n_heads=12,  # Attention heads
-    num_encoder_layers=0,  # Encoder layers (if applicable)
-    num_decoder_layers=6,  # Decoder layers (if applicable)
-    d_ff=3072,  # Feed-forward dimension
-    n_ctx=512,  # Maximum sequence length
-    dropout=0.1,  # Dropout rate
-    device="cpu"  # Device placement
-)
+## Outputs
+
+During training, analysis histories are written as JSON under `plots_path`, one folder per enabled module (for example `eap/eap_history.json` and `intrinsic_dimensions/intrinsic_dimension_history.json`). Circuit graphs are saved under `log_dir/eap_graphs/`, the model checkpoint is saved to `save_path`, and MechInt-DB exports are written as Turtle files under `owl_output_dir`. Generated results are stored locally and should not be committed.
+
+## Repository layout
+
+```text
+.
+├── README.md
+├── environment.yml
+├── requirements.txt
+├── LICENSE.txt
+├── compass_method.gif          # Method animation
+├── docs/                       # Usage guides for the analysis modules
+├── eap/                        # Circuit discovery with EAP and EAP-IG
+│   ├── analyzer.py             # Attribution, top-k circuit and faithfulness
+│   ├── attribute.py            # Edge scoring methods
+│   ├── evaluate.py             # Circuit evaluation by patching
+│   └── graph.py                # Model graph, edges and circuit export
+├── mechint_db/                 # OWL/RDF knowledge base for circuits
+│   ├── integration/            # EAP analysis with OWL export
+│   ├── ontology/               # MechInt ontology schema
+│   └── storage/                # Turtle exporter
+└── trace/                      # Models, training and analysis modules
+    ├── dataloader/
+    ├── hessian/
+    ├── intrisic_dimensions/
+    ├── linguistic_probes/
+    ├── output_monitoring/
+    ├── tokenizer/
+    ├── training/               # Trainer and analysis callbacks
+    └── transformer/            # Transformer and hooked transformer models
 ```
-### Decoder-Only Models
-
-Optimized for autoregressive generation and language modeling:
-
-```python
-# Create a decoder-only model 
-config = TransformerConfig(
-    model_type="decoder_only",
-    vocab_size=2000,
-    d_model=768,
-    num_heads=12,
-    num_decoder_layers=12,
-    d_ff=3072,
-    n_ctx=64, # Maximum sequence length
-    dropout=0.1,
-    device="cpu"
-)
-
-decoder_model = Transformer.from_config(config)
-
-# Forward pass for autoregressive generation
-input_ids = torch.randint(0, 2000, (2, 32))  # [batch_size, seq_len]
-logits = decoder_model(tgt=input_ids)
-print(f"Output shape: {logits.shape}")  # [2, 32, 2000]
-```
-### Encoder-Only Models
-
-Perfect for classification, encoding, and representation learning tasks:
-
-```python
-# Create an encoder-only model 
-import torch
-from trace.transformer import Transformer, TransformerConfig
-
-config = TransformerConfig(
-    model_type="encoder_only",
-    vocab_size=30522,
-    d_model=768,
-    n_heads=12,
-    num_encoder_layers=6,
-    d_ff=3072,
-    n_ctx=512,
-    dropout=0.1
-)
-
-encoder_model = Transformer.from_config(config)
-
-# Forward pass
-input_ids = torch.randint(0, 30522, (2, 20))  # [batch_size, seq_len]
-hidden_states = encoder_model(src=input_ids)
-print(f"Output shape: {hidden_states.shape}")  # [2, 20, 768]
-```
-
-### Encoder-Decoder Models
-
-Ideal for translation, summarization, and other sequence-to-sequence tasks:
-
-```python
-# Create an encoder-decoder model 
-config = TransformerConfig(
-    model_type="encoder_decoder",
-    vocab_size=32128,
-    d_model=512,
-    num_heads=8,
-    num_encoder_layers=6,
-    num_decoder_layers=6,
-    d_ff=2048,
-    n_ctx=512, # Maximum sequence length
-    dropout=0.1
-)
-
-encoder_decoder_model = Transformer.from_config(config)
-
-# Forward pass with source and target sequences
-src_ids = torch.randint(0, 32128, (2, 15))  # Source sequence
-tgt_ids = torch.randint(0, 32128, (2, 10))  # Target sequence
-logits = encoder_decoder_model(src=src_ids, tgt=tgt_ids)
-print(f"Output shape: {logits.shape}")  # [2, 10, 32128]
-```
-
-
-## Intrinsic Dimensions Analysis
-
-COMPASS provides comprehensive tools for analyzing the intrinsic dimensionality of transformer representations using advanced geometric methods. This helps understand how models compress and organize information across layers.
-
-### Supported Methods
-
-- **TwoNN**: Two Nearest Neighbors method for robust ID estimation
-- **MLE**: Maximum Likelihood Estimation approach
-- **PCA**: Principal Component Analysis for linear dimensionality
-
-### Basic Configuration
-
-```python
-from trace.intrinsic_dimensions import IntrinsicDimensionsConfig, IntrinsicDimensionAnalyzer
-
-# Create configuration for intrinsic dimensions analysis
-config = IntrinsicDimensionsConfig(
-    model_type="decoder_only",           # Model architecture
-    id_method="TwoNN",                   # Dimensionality estimation method
-    layers_to_analyze=None,              # None = analyze all layers, or layers_to_analyze={'decoder': [0, 3, 5]},
-    save_visualizations=True,            # Generate plots
-    show_plots=False,                    # Display plots immediately
-    log_dir="./analysis_results"     # Output directory
-)
-
-# Initialize analyzer
-analyzer = IntrinsicDimensionAnalyzer(config)
-
-# or simply use default settings
-#analyzer = IntrinsicDimensionAnalyzer()
-
-# Run comprehensive analysis
-intrinsic_dimensions = analyzer.analyze(
-    model=decoder_model,
-    data_loader=data_loader,
-    layers=[0, 3, 6, 9, 11],  # Specific layers to analyze
-    model_name="my_transformer"
-)
-
-# Results dictionary: {(layer_idx, layer_type): intrinsic_dimension}
-print("Intrinsic Dimensions Results:")
-for (layer_idx, layer_type), id_value in intrinsic_dimensions.items():
-    print(f"  Layer {layer_idx} ({layer_type}): {id_value:.2f}")
-```
-
-### Manual Hidden State Extraction
-
-```python
-from trace.intrinsic_dimensions import (
-    extract_hidden_representations,
-    compute_intrinsic_dimensions,
-    average_intrinsic_dimension
-)
-
-# Extract hidden states from specific layers
-hidden_states, _, _ = extract_hidden_representations(
-    model=encoder_model,
-    dataloader=data_loader,
-    layer_indices={'encoder': [0, 2, 4]},
-    device='cuda'
-)
-
-# Compute intrinsic dimensions
-config = IntrinsicDimensionsConfig(id_method="TwoNN")
-intrinsic_dims = compute_intrinsic_dimensions(hidden_states, config)
-```
-
-### Intrinsic Dimensions Visualization Options
-
-
-```python
-from trace.intrinsic_dimensions import IntrinsicDimensionsVisualizer
-
-# Create custom visualizer
-visualizer = IntrinsicDimensionsVisualizer(
-    log_dir="./analysis_results",
-    config=config
-)
-
-# Generate comprehensive visualizations
-visualizer.generate_all_visualizations(
-    intrinsic_dimensions=intrinsic_dims,
-    model_name="transformer_analysis",
-    show_plots=True  # Display plots immediately
-)
-
-# Individual plot types
-visualizer.plot_id_by_layer(intrinsic_dims, "my_model", save_plot=True)
-visualizer.plot_id_distribution(intrinsic_dims, "my_model", save_plot=True)
-visualizer.plot_final_id(intrinsic_dims, "my_model", save_plot=True)
-
-# Save metrics to CSV
-visualizer.save_metrics(intrinsic_dims, "my_model")
-```
-
-## Hessian Analysis
-
-COMPASS provides comprehensive Hessian analysis capabilities for understanding loss landscape properties, training dynamics, and memorization patterns. This module analyzes curvature information to reveal insights about model optimization and generalization.
-
-### Key Features
-
-- **Eigenvalue Analysis**: Track extreme eigenvalues, trace estimates, and spectral properties
-- **Component-Specific Analysis**: Analyze individual model components (attention, FFN, embeddings)
-- **Gradient-Hessian Alignment**: Monitor optimization direction relative to curvature
-- **Memorization Detection**: Compare train/validation landscapes to detect overfitting
-- 
-### Basic Configuration
-
-```python
-from trace.hessian import HessianConfig, HessianAnalyzer
-
-# Create configuration for Hessian analysis
-config = HessianConfig(
-    n_components=10,                           # Number of eigenvalues to compute
-    num_batches=100,                          # Batches for Hessian estimation
-    device="cuda",                            # Device for computation
-    
-    # Analysis toggles
-    track_component_hessian=True,             # Analyze individual components
-    track_gradient_alignment=True,            # Monitor gradient-Hessian alignment
-    track_train_val_landscape_divergence=True, # Detect memorization signals
-    
-    # Component selection
-    component_list=["attention", "ffn", "hidden_states"],
-    
-    # Output settings
-    log_dir="./analysis_results",             # Output directory
-    save_hessian_data=True,                   # Save raw data
-    show_plots=False                          # Display plots immediately
-)
-
-# Initialize analyzer
-analyzer = HessianAnalyzer(config) # alternatively, use HessianAnalyzer.default() for default settings, HessianAnalyzer.minimal() for minimal settings, or HessianAnalyzer.comprehensive() for comprehensive settings
-```
-
-### Single-Step Analysis
-
-```python
-import torch.nn as nn
-
-# Prepare loss function and data
-loss_fn = nn.CrossEntropyLoss()
-# train_batch and val_batch should be prepared with your data
-
-# Perform comprehensive analysis at a single training step
-results = analyzer.analyze_step(
-    model=decoder_model,
-    loss_fn=loss_fn,
-    train_batch=train_batch,
-    val_batch=val_batch,              # Optional for memorization analysis
-    model_type="decoder_only",
-    step=100
-)
-
-# Access results
-print(f"Max eigenvalue: {results['hessian']['max_eigenvalue']:.2e}")
-print(f"Min eigenvalue: {results['hessian']['min_eigenvalue']:.2e}")
-print(f"Trace estimate: {results['hessian']['hessian_trace_estimate']:.2e}")
-print(f"Negative eigenvalues: {results['hessian']['negative_count']}")
-print(f"Effective rank: {results['hessian']['effective_rank_95']}")
-```
-
-### Component-Specific Analysis
-
-```python
-from trace.hessian import ComponentAnalyzer, ComponentSelector
-
-# Initialize component analyzer
-component_analyzer = ComponentAnalyzer()
-
-# Analyze all components
-component_results = component_analyzer.analyze_all_components(
-    model=decoder_model,
-    loss_fn=loss_fn,
-    data_batch=train_batch,
-    model_type="decoder_only",
-    component_list=None,  # None = analyze all components
-    n_components=10
-)
-```
-
-### Gradient-Hessian Alignment Analysis
-
-```python
-# Analyze optimization dynamics through gradient-curvature relationships
-alignment_results = analyzer.compute_gradient_alignment(
-    model=decoder_model,
-    loss_fn=loss_fn,
-    data_batch=train_batch,
-    model_type="decoder_only",
-    eigenvalues=eigenvalues,  # From previous Hessian computation
-    eigenvectors=eigenvectors
-)
-
-# Key alignment metrics
-print(f"Gradient-Hessian alignment: {alignment_results['grad_Hg_alignment']:.4f}")
-print(f"Weighted alignment score: {alignment_results['weighted_alignment']:.4f}")
-print(f"Curvature/gradient ratio: {alignment_results['grad_Hg_ratio']:.4f}")
-```
-
-### Memorization Detection
-
-```python
-# Detect memorization through train/validation landscape comparison
-memorization_signals = analyzer.compute_train_val_divergence(
-    model=decoder_model,
-    loss_fn=loss_fn,
-    train_batch=train_batch,
-    val_batch=val_batch,
-    model_type="decoder_only"
-)
-
-# Memorization indicators
-print(f"Landscape divergence score: {memorization_signals['train_val_landscape_divergence_score']:.4f}")
-print(f"Trace ratio (train/val): {memorization_signals['trace_ratio']:.4f}")
-print(f"Eigenvalue distribution overlap: {memorization_signals['eigenvalue_distribution_overlap']:.4f}")
-print(f"Effective rank difference: {memorization_signals['effective_rank_diff']}")
-```
-
-### Hessian Visualization
-
-```python
-from trace.hessian import HessianVisualizer
-
-# Initialize visualizer
-visualizer = HessianVisualizer(config)
-
-# Track analysis over multiple steps
-hessian_history = {}
-for step in range(0, 1000, 100):
-    # Perform analysis at each step
-    results = analyzer.analyze_step(
-        model=decoder_model,
-        loss_fn=loss_fn,
-        train_batch=train_batch,
-        val_batch=val_batch,
-        step=step
-    )
-    hessian_history[step] = results
-
-# Generate comprehensive visualization report
-visualizer.create_comprehensive_report(
-    hessian_history=hessian_history,
-    model_name="my_transformer"
-)
-
-# Individual plot types
-visualizer.plot_eigenvalue_evolution(hessian_history, "my_transformer")
-visualizer.plot_gradient_alignment(hessian_history, "my_transformer") 
-visualizer.plot_component_comparison(hessian_history, "my_transformer")
-visualizer.plot_memorization_metrics(hessian_history, model_name="my_transformer")
-```
-
-## Linguistic Probes
-
-COMPASS provides linguistic probing capabilities to analyze what linguistic knowledge models acquire during training. This module includes both probe training infrastructure and real-time monitoring systems for tracking linguistic understanding.
-
-### Key Features
-
-- **Multi-label Probing**: Train sophisticated probes to detect multiple linguistic features simultaneously
-- **POS Analysis**: Track part-of-speech understanding (basic and detailed granularity)
-- **Semantic Role Analysis**: Monitor semantic role labeling capabilities
-- **Flexible Tagging**: Rule-based taggers for synthetic and natural text
-- **Performance Tracking**: Category-specific performance monitoring
-
-### Two-Phase Workflow
-
-The linguistic probes module follows a two-phase workflow:
-
-1. **Training Phase**: Train probes on your model to establish linguistic understanding baselines
-2. **Monitoring Phase**: Use trained probes to monitor linguistic capabilities during model training
-
-### Phase 1: Training Probes
-
-First, you need to train probes on your model to establish what linguistic features it has learned:
-
-```python
-from trace.linguistic_probes import LinguisticProbesConfig, ProbeTrainer
-
-# Configure probe training
-config = LinguisticProbesConfig(
-    # Probe architecture
-    probe_type='multilabel',           # 'linear' or 'multilabel'
-    hidden_dim=128,                    # Hidden dimension for MLPs
-    
-    # Training parameters
-    epochs=3,                          # Training epochs for probes
-    lr=0.001,                         # Learning rate
-    batch_size=64,                    # Batch size for probe training
-    device="cuda",                    # Device for computation
-    
-    # What to analyze
-    track_pos=True,                   # Train POS probes
-    track_semantic=True,              # Train semantic role probes
-    pos_granularity='detailed',          # 'basic' or 'detailed'
-    semantic_granularity='detailed',     # 'basic' or 'detailed'
-    
-    # Layer selection (None = all layers)
-    layer_indices=None,
-    
-    # Output settings
-    save_probes=True,                 # Save trained probes
-    save_visualizations=False,         # Create training visualizations
-    save_path='./trained_probes',     # Where to save probes
-    log_dir="./analysis_results",  # Training logs directory
-)
-
-# alternatively, use LinguisticProbesConfig.minimal() for minimal settings, LinguisticProbesConfig.comprehensive() for comprehensive settings, or LinguisticProbesConfig.default() for default settings
-
-# Initialize trainer
-probe_trainer = ProbeTrainer(config, tokenizer)
-
-# Train probes on your model
-training_results = probe_trainer.train_all_probes(
-    model=decoder_model,
-    dataloader=your_training_dataloader
-)
-
-# View training results
-for layer_key, layer_results in training_results.items():
-    print(f"\nLayer {layer_key}:")
-    if 'pos' in layer_results:
-        pos_acc = layer_results['pos']['accuracy']
-        print(f"  POS accuracy: {pos_acc:.3f}")
-    if 'semantic' in layer_results:
-        sem_acc = layer_results['semantic']['accuracy']
-        print(f"  Semantic accuracy: {sem_acc:.3f}")
-```
-
-### Granularity Options
-
-Configure the level of linguistic analysis detail:
-
-```python
-# Basic granularity - simplified categories
-basic_config = LinguisticProbesConfig(
-    pos_granularity='basic',           # NOUN, VERB, ADJ, ADV, PREP, DET, CONJ, OTHER
-    semantic_granularity='basic'       # AGENT, PATIENT, ACTION, LOCATION, RELATION, CONNECTOR, RESULT, OTHER
-)
-
-# Detailed granularity - fine-grained categories  
-detailed_config = LinguisticProbesConfig(
-    pos_granularity='detailed',        # Includes TRANSITIVE_VERB, COMMUNICATION_VERB, etc.
-    semantic_granularity='detailed'    # Includes MOTION, COMMUNICATION, DESTINATION, etc.
-)
-
-# View available categories
-print("POS categories:", basic_config.get_pos_categories())
-print("Semantic categories:", basic_config.get_semantic_categories())
-```
-
-### Phase 2: Real-time Monitoring
-
-Once you have trained probes, use them to monitor linguistic understanding during training:
-
-```python
-from trace.linguistic_probes import POSAnalyzer, SemanticAnalyzer
-
-# Configure monitoring (note: different config than training)
-monitoring_config = LinguisticProbesConfig(
-    track_pos=True,
-    track_semantic=True,
-    layer_indices={'decoder': [0, 6, 11]},  # Monitor specific layers
-    log_dir="./analysis_results",
-    save_visualizations=True,
-    
-    # Specify where to load trained probes from
-    probe_load_path={
-        (0, 'decoder'): './trained_probes/pos_layer0_decoder.pt',
-        (6, 'decoder'): './trained_probes/pos_layer6_decoder.pt',
-        (11, 'decoder'): './trained_probes/pos_layer11_decoder.pt',
-    }
-)
-
-# Initialize analyzers
-pos_analyzer = POSAnalyzer(monitoring_config)
-semantic_analyzer = SemanticAnalyzer(monitoring_config)
-
-# Load pre-trained probes
-probe_paths = {
-    (0, 'decoder'): './trained_probes/pos_layer0_decoder.pt',
-    (6, 'decoder'): './trained_probes/pos_layer6_decoder.pt',
-    (11, 'decoder'): './trained_probes/pos_layer11_decoder.pt',
-}
-pos_analyzer.load_probes(probe_paths)
-
-# Monitor during training step
-def training_step_with_linguistic_monitoring(model, batch, step):
-    # Your regular training code here...
-    
-    if step % 50 == 0:  # Monitor every 50 steps
-        # Get confidence scores from pre-trained probes
-        pos_confidences = pos_analyzer.analyze(
-            model=model,
-            dataloader=DataLoader([batch]),  # Single batch
-            tokenizer=tokenizer,
-            model_name=f"step_{step}"
-        )
-        
-        # pos_confidences structure:
-        # {(layer_idx, layer_type): {'NOUN': 0.85, 'VERB': 0.72, ...}}
-        
-        for layer_key, confidences in pos_confidences.items():
-            print(f"Step {step}, Layer {layer_key}:")
-            for tag, confidence in confidences.items():
-                print(f"  {tag}: {confidence:.3f}")
-```
-
-### Linguistic Taggers
-
-COMPASS includes sophisticated rule-based taggers for synthetic data:
-
-```python
-from trace.linguistic_probes import POSTagger, SemanticTagger
-
-# Initialize taggers
-pos_tagger = POSTagger(
-    granularity='detailed',
-    use_nltk_fallback=True  # Fallback to NLTK for unknown tokens
-)
-
-semantic_tagger = SemanticTagger(granularity='detailed')
-
-# Tag synthetic text
-text = "noun_entity transitive_verb_action noun_target preposition_to location_place"
-pos_tags = pos_tagger.tag_text(text)
-semantic_tags = semantic_tagger.tag_text(text)
-
-print("POS tags:", pos_tags)
-print("Semantic tags:", semantic_tags)
-
-# Output:
-# POS tags: [('noun_entity', 'NOUN'), ('transitive_verb_action', 'TRANSITIVE_VERB'), ...]
-# Semantic tags: [('noun_entity', 'AGENT'), ('transitive_verb_action', 'ACTION'), ...]
-```
-
-### Performance Tracking
-
-Track linguistic performance by category during training:
-
-```python
-from trace.linguistic_probes import POSPerformanceTracker, SemanticPerformanceTracker
-
-# Initialize trackers
-pos_tracker = POSPerformanceTracker(
-    tokenizer=tokenizer,
-    log_dir="./performance_tracking",
-    config=LinguisticProbesConfig(pos_granularity='basic')
-)
-
-semantic_tracker = SemanticPerformanceTracker(
-    tokenizer=tokenizer,
-    log_dir="./performance_tracking",
-    config=LinguisticProbesConfig(semantic_granularity='basic')
-)
-
-# Use during training
-def training_step_with_performance_tracking(model, batch, step):
-    # Forward pass
-    outputs = model(**batch)
-    logits = outputs.logits
-    
-    # Process batch for linguistic performance metrics
-    pos_metrics = pos_tracker.process_batch(batch, logits)
-    semantic_metrics = semantic_tracker.process_batch(batch, logits)
-    
-    # Update trackers
-    pos_tracker.update_epoch_metrics(pos_metrics, step)
-    semantic_tracker.update_epoch_metrics(semantic_metrics, step)
-    
-    # Print category-specific accuracies
-    if step % 100 == 0:
-        for category, accuracy in pos_metrics['pos_analysis_accuracy'].items():
-            print(f"POS {category}: {accuracy:.3f}")
-```
-
-### Probes Visualization
-
-Generate detailed analysis visualizations:
-
-```python
-from trace.linguistic_probes import ProbesVisualizer
-
-# Initialize visualizer
-visualizer = ProbesVisualizer(
-    log_dir="./analysis_results",
-    config=monitoring_config
-)
-
-# Track confidence over training
-confidence_history = {}
-for step in range(0, 1000, 50):
-    # Get confidence scores at this step
-    pos_confidences = pos_analyzer.analyze(model, eval_dataloader, tokenizer)
-    confidence_history[step] = pos_confidences
-
-# Create comprehensive plots
-visualizer.plot_probe_confidence_analysis(
-    confidence_data=confidence_history,
-    model_name="my_transformer",
-    analysis_type="pos",
-    save_plot=True,
-    show_plots=False
-)
-```
-
-## Output Monitoring
-
-COMPASS's Output Monitoring module provides real-time analysis of model output quality by tracking linguistic accuracy across different grammatical and semantic categories during training. 
-
-### Key Features
-- **POS Accuracy Tracking**: Track part-of-speech accuracy by category (nouns, verbs, adjectives, etc.)
-- **Semantic Role Monitoring**: Monitor semantic role labeling accuracy (agents, patients, actions, etc.)
-- **Category-specific Insights**: Identify which linguistic categories your model struggles with most
-- **Training Evolution Visualization**: See how output quality improves over training steps
-
-### Basic usage
-
-```python
-from trace.output_monitoring import OutputMonitoringAnalyzer, OutputMonitoringConfig
-
-# Configure output monitoring
-config = OutputMonitoringConfig(
-    track_pos_performance=True,        # Track POS accuracy
-    track_semantic_roles=True,         # Track semantic role accuracy
-    pos_granularity='basic',           # 'basic' or 'detailed'
-    semantic_granularity='basic',      # 'basic' or 'detailed'
-    save_visualizations=True,          # Generate plots
-    log_dir="./analysis_results",     # Save results here
-    show_plots=False                   # Don't display plots during training
-)
-
-# Initialize analyzer
-output_analyzer = OutputMonitoringAnalyzer(config) # alternatively, use OutputMonitoringAnalyzer.default() for default settings
-
-# Integrate into training loop
-def training_step_with_output_monitoring(model, batch, step):
-    # Forward pass
-    outputs = model(**batch)
-    logits = outputs.logits
-    
-    # Calculate loss and do backward pass
-    loss = loss_function(logits, batch['labels'])
-    loss.backward()
-    optimizer.step()
-    all_monitoring_results = {}
-    # Monitor output quality every 50 steps
-    if step % 50 == 0:
-        monitoring_results = output_analyzer.analyze(
-            batch=batch,
-            outputs=logits,
-            tokenizer=output_analyzer,
-            step=step
-        )
-        
-        # Log results
-        if 'pos_accuracy' in monitoring_results:
-            for category, accuracy in monitoring_results['pos_accuracy'].items():
-                print(f"Step {step} - POS {category}: {accuracy:.3f}")
-        
-        
-        if 'semantic_accuracy' in monitoring_results:
-            for category, accuracy in monitoring_results['semantic_accuracy'].items():
-                print(f"Step {step} - Semantic {category}: {accuracy:.3f}")
-                
-        all_monitoring_results[step] = monitoring_results
-
-    # Generate final analysis
-    output_analyzer.visualizer.plot_pos_performance_evolution(
-        output_analyzer, "my_model", save_plot=True
-    )
-    
-    output_analyzer.visualizer.plot_semantic_role_performance_evolution(
-        all_monitoring_results, "my_model", save_plot=True
-    )
-    
-    return all_monitoring_results
-```
-
-### Output Visualization
-
-Generate comprehensive visualizations and export data:
-
-```python
-from trace.output_monitoring import OutputMonitoringVisualizer
-
-# Initialize visualizer
-output_visualizer = OutputMonitoringVisualizer(
-    log_dir="./monitoring_visualizations",
-    config=config
-)
-
-# Plot POS accuracy evolution
-output_visualizer.plot_pos_performance_evolution(
-    monitoring_results=all_monitoring_results,
-    model_name="transformer_v2",
-    save_plot=True
-)
-
-# Plot semantic role accuracy evolution
-output_visualizer.plot_semantic_role_performance_evolution(
-    monitoring_results=all_monitoring_results,
-    model_name="transformer_v2", 
-    save_plot=True
-)
-
-# Save metrics to CSV for further analysis
-output_visualizer.save_metrics(
-    monitoring_results=all_monitoring_results,
-    model_name="transformer_v2"
-)
-```
-
-## MechInt-DB: Mechanistic Interpretability Knowledge Base
-
-COMPASS includes **MechInt-DB**, a semantic database layer for storing, querying, and tracking transformer circuit structures discovered through mechanistic interpretability analysis. It converts EAP circuit analysis results into structured OWL/RDF knowledge graphs.
-
-### Key Features
-
-- **OWL/RDF Export**: Persist discovered circuits as semantic knowledge graphs in Turtle format
-- **MechInt Ontology**: Comprehensive ontology modeling transformer components (attention heads, MLPs, residual streams), circuit edges, semantic roles, and interventions
-- **Temporal Evolution Tracking**: Track how circuits change across training steps
-- **EAP Integration**: Seamless integration with Edge Attribution Patching analysis
-- **Performance Metrics**: Store faithfulness scores, ablation results, and circuit statistics alongside circuit structure
-
-### Basic Usage
-
-```python
-from mechint_db.integration import MechIntEAPConfig, MechIntEAPAnalyzer
-
-# Configure EAP analysis with OWL export
-config = MechIntEAPConfig(
-    method="EAP-IG",
-    top_k=28,
-    ig_steps=5,
-    save_owl=True,                          # Enable OWL/RDF export
-    owl_output_dir="./circuit_ontologies",  # Output directory
-    experiment_description="Semantic role circuit analysis",
-    researcher_name="Your Name"
-)
-
-# Initialize analyzer
-analyzer = MechIntEAPAnalyzer(config)
-
-# Run analysis with automatic OWL export
-results, graph = analyzer.analyze(
-    model=hooked_model,
-    batch_loader=data_loader,
-    tokenizer=tokenizer,
-    model_name="my_transformer",
-    step=1000,
-    experiment_id="semantic_roles_exp1"
-)
-
-# Access results
-print(f"Faithfulness: {results['faithfulness']:.4f}")
-print(f"Circuit edges: {results['num_edges_in_circuit']}")
-```
-
-### Quick Analysis with Export
-
-```python
-from mechint_db.integration import analyze_with_owl_export
-
-# One-shot function for running EAP + OWL export
-results, graph, owl_path = analyze_with_owl_export(
-    model=hooked_model,
-    cnp_dataset_path="./data/minimal_pairs.json",
-    experiment_id="semantic_roles_exp1",
-    step=1000,
-    method="EAP-IG",
-    top_k=28,
-    tokenizer=tokenizer
-)
-
-print(f"Circuit saved to: {owl_path}")
-```
-
-### Temporal Circuit Evolution
-
-```python
-# Track circuit evolution across training
-analyzer.export_temporal_evolution(
-    experiment_results=all_step_results,  # Dict of {step: (results, graph)}
-    experiment_id="semantic_roles_exp1"
-)
-# Outputs: evolution.ttl with snapshots and change tracking
-```
-
-### Ontology Structure
-
-The MechInt ontology models:
-- **Transformer Components**: `AttnHead`, `MLP`, `LayerNorm`, `Residual`, `Embed`
-- **Circuit Structure**: `Circuit`, `CircuitEdge`, `CircuitNode` with scores, ranks, and edge types (Q/K/V/OV/Flow)
-- **Semantic Concepts**: `SemanticRole`, `SemanticRule` linking circuits to linguistic function
-- **Temporal Evolution**: `CircuitEvolution`, `CircuitChange` for tracking structural changes over training
-- **Experiments**: `Experiment`, `Run`, `Checkpoint` for reproducibility
-
-Output is stored as Turtle (`.ttl`) files organized by experiment:
-```
-circuit_ontologies/
-└── semantic_roles_exp1/
-    └── circuits/
-        ├── step_0.ttl
-        ├── step_500.ttl
-        ├── step_1000.ttl
-        └── evolution.ttl
-```
-
-## Working with ABSynth Data
-
-### Understanding ABSynth Structure
-
-ABSynth generates synthetic corpora with controlled linguistic properties. Each sentence includes:
-
-- **Semantic Frame Annotations**: Agent, Patient, Theme, Location roles
-- **Linguistic Features**: POS tags, dependency parsing, constituency trees
-- **Statistical Properties**: Zipfian word frequencies, entropy profiles
-- **Complexity Levels**: Simple, medium, and complex sentence structures
-
-### Loading ABSynth Corpora
-
-```python
-from trace.tokenizer import create_tokenizer_from_data
-
-# Load ABSynth corpus
-corpus_path = "path/to/absynth_corpus.json"
-tokenizer = create_tokenizer_from_data(vocab_file=corpus_path)
-
-# The tokenizer automatically handles ABSynth's synthetic vocabulary
-# and maintains consistency with the corpus's linguistic annotations
-```
-
-## Creating Your Own ABSynth Dataset
-
-If you don't have an ABSynth corpus file, you can quickly generate one using the anonymed:
-
-
-
-```python
-from absynth.corpus import SyntheticCorpusGenerator
-
-# Generate a basic corpus (3-line minimal example)
-generator = SyntheticCorpusGenerator()
-corpus = generator.generate_corpus(num_sentences=1000)
-corpus.save("my_absynth_corpus.json")
-
-# Now use with COMPASS
-CORPUS_PATH = "my_absynth_corpus.json"  # Use in your analysis pipeline
-```
-
-### Custom Configuration (Optional)
-
-For more control over your synthetic data:
-
-```python
-from absynth.corpus import SyntheticCorpusGenerator
-
-# Generate corpus with specific properties
-generator = SyntheticCorpusGenerator()
-corpus = generator.generate_corpus(
-    num_sentences=10000,
-    complexity_distribution={
-        "simple": 0.55,       # 55% simple sentences
-        "medium": 0.35,       # 35% medium complexity  
-        "complex": 0.1        # 10% complex sentences
-    },
-    semantic_frame_distribution={
-        "transitive_action": 0.4,     # Subject-verb-object patterns
-        "intransitive_action": 0.25,  # Subject-verb patterns
-        "communication": 0.2,         # Communication verbs
-        "motion": 0.15               # Movement and location
-    }
-)
-
-# Save in format compatible with COMPASS analysis
-corpus.save("./data/custom_absynth_corpus.json", indent=2)
-```
-
-This generates synthetic corpora optimized for transformer analysis with controlled linguistic properties, semantic annotations, and statistical characteristics ideal for COMPASS's analysis modules.
-
-
 
 ## Citation
 
-If you use COMPASS in your research, please cite:
+If you use this code in your research, please cite:
 
 ```bibtex
 @inproceedings{aljaafari-etal-2026-emergence,
@@ -1102,12 +190,14 @@ If you use COMPASS in your research, please cite:
 }
 ```
 
-## Contact
-
-For questions or feedback, please reach out at: nuraaljaafari@gmail.com
-
 ## License
 
-This project is licensed under the GPLv3 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPLv3 License - see the [LICENSE](LICENSE.txt) file for details.
 
-The code heavily leverages open-source libraries including PyTorch, NumPy, SciPy, scikit-learn, Matplotlib, and EAP-IG (base code). Please refer to the LICENSE file for full details on third-party licenses.
+The `eap` package builds on the EAP-IG code of [Hanna et al. (2024)](https://arxiv.org/abs/2403.17806).
+
+## Contact
+
+For questions or issues regarding this code, or for paper-related inquiries:
+- Open an issue in this repository
+- Contact: nuraaljaafari@gmail.com
