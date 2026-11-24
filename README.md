@@ -15,7 +15,7 @@ This repository contains the code for the paper "Emergence and Localisation of S
 
 ![Animation of the COMPASS method](compass_method.gif)
 
-The code works with the repository's own transformer implementation and with TransformerLens `HookedTransformer` models, and is designed for synthetic corpora generated with ABSynth. Alongside circuit discovery, it provides analysis modules for linguistic probes, intrinsic dimensions, Hessian spectra and output monitoring, and MechInt-DB, which stores circuits as OWL/RDF knowledge graphs.
+The code works with the repository's own transformer implementation and with TransformerLens `HookedTransformer` models, and is designed for synthetic corpora generated with [ABSynth](https://github.com/nura-j/ABSynth_dataset). Alongside circuit discovery, it provides analysis modules for linguistic probes, intrinsic dimensions, Hessian spectra and output monitoring, and MechInt-DB, which stores circuits as OWL/RDF knowledge graphs.
 
 ## Setup
 
@@ -32,6 +32,8 @@ The environment installs Graphviz from conda-forge, which is needed to draw circ
 pip install -r requirements.txt
 pip install pygraphviz==1.14
 ```
+
+Both routes install [ABSynth](https://github.com/nura-j/ABSynth_dataset), the synthetic data generator, from GitHub.
 
 ## Usage
 

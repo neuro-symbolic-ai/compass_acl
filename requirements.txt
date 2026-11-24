@@ -1,4 +1,5 @@
-#Direct dependencies of COMPASS (Python 3.11).
+
+# Direct dependencies of COMPASS (Python 3.11).
 torch==2.7.1
 transformer-lens==2.16.1
 transformers==4.52.4
@@ -15,8 +16,7 @@ jaxtyping==0.3.2
 tqdm==4.67.1
 nltk==3.9.1
 pillow==11.2.1
-ABSYNTH_PLACEHOLDER
-
+absynth @ git+https://github.com/nura-j/ABSynth_dataset.git
+ 
 # Circuit graph images need pygraphviz, which builds against the Graphviz
-# system library. The conda environment installs both; with pip only,
-# install Graphviz first, then: pip install pygraphviz==1.14
+# system library. The conda environment installs both; with pip 
