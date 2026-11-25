@@ -14,9 +14,8 @@ AGENTS: List[str] = [
     "doctor",
 ]
 THEMES: List[str] = [
-    "book", "file", "box", "chair", "shelf", "bread", "letter",
-    "package", "tools", "frame", "door", "table", "wall", "cup",
-    "lamp", "cake", "crate", "parts", "list", "plan", "rule",
+    "book", "file", "box", "chair", "shelf", "bread", "letter", "package", "tools", "frame",
+    "door", "table", "wall", "cup", "lamp", "cake", "crate", "parts", "list", "plan", "rule",
 ]
 
 # Target heads per role: the correct next token after the role's scaffold.
@@ -112,4 +111,12 @@ NAMES: List[str] = list(dict.fromkeys(_NAMES_COMMON + _NAMES_EXTRA))
 
 # Places and objects used in IOI templates.
 IOI_PLACES: List[str] = ["store", "garden", "restaurant", "school", "hospital", "office", "house", "station"]
-IOI_OBJECTS: List[str] = ["ring", "bone", "basketball", "computer", "necklace", "drink", "snack"]
+IOI_OBJECTS: List[str] = ["ring", "kiss", "bone", "basketball", "computer", "necklace", "drink", "snack"]
+
+# Nouns for the greater-than task ("The <noun> lasted from the year 1352 to the year 13").
+GREATER_THAN_NOUNS: List[str] = [
+    "attack", "campaign", "case", "contact", "contract", "deal", "development", "effect",
+    "employment", "existence", "fall", "growth", "impact", "marriage", "operation", "order",
+    "plan", "practice", "process", "program", "progress", "project", "quest", "rise",
+    "rule", "shift", "study", "test", "testing", "tests", "trial", "trip", "work",
+]

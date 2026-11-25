@@ -38,6 +38,7 @@ class Lexicon:
         self.names = self._filter(W.NAMES) if self.config.include_names else []
         self.ioi_places = self._filter(W.IOI_PLACES)
         self.ioi_objects = self._filter(W.IOI_OBJECTS)
+        self.greater_than_nouns = list(W.GREATER_THAN_NOUNS)   # not next-token targets; unfiltered
 
         self.adverbs, self.adj_agent, self.adj_theme = W.ADVERBS, W.ADJ_AGENT, W.ADJ_THEME
         self.prefaces = W.PREFACES
