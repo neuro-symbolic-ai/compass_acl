@@ -12,7 +12,7 @@ def load_model(name: str, device: str, half_precision_on_cuda: bool = False):
     if tok.pad_token_id is None:
         tok.pad_token = tok.eos_token
     dtype = torch.float16 if (half_precision_on_cuda and "cuda" in device) else torch.float32
-    model = AutoModelForCausalLM.from_pretrained(name, torch_dtype=dtype)
+    model = AutoModelForCausalLM.from_pretrained(name, dtype=dtype)
     model.to(device).eval()
     return tok, model
 

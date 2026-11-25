@@ -32,8 +32,10 @@ class Lexicon:
 
         self.agents = self._filter(W.AGENTS)
         self.themes = self._filter(W.THEMES)
+        # Heads are built for every role, not only config.roles: a corruption
+        # swaps in another role's scaffold and needs that role's heads.
         self.heads: Dict[str, List[str]] = {
-            role: self._filter(self._raw_heads(role)) for role in self.roles
+            role: self._filter(self._raw_heads(role)) for role in R.ROLES
         }
         self.names = self._filter(W.NAMES) if self.config.include_names else []
         self.ioi_places = self._filter(W.IOI_PLACES)
