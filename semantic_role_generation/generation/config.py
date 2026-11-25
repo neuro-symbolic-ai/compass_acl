@@ -27,7 +27,7 @@ class GenerationConfig:
     # Reject pairs whose corrupted prompt is identical to the clean prompt.
     # The original generator accepted them (at -> at, "for the" -> "for the").
     skip_identical_corruption: bool = True
-    # Accept a same-role foil when no cross-role scaffold of equal length exists.
+    # Accept a same-role corrput when no cross-role scaffold of equal length exists.
     allow_same_role_fallback: bool = True
 
     def __post_init__(self):
