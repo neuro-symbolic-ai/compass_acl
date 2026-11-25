@@ -2,7 +2,7 @@
 
 The lexicon holds every word inventory used to build semantic-role prompts and IOI prompts: the roles and their prepositional scaffolds, the cue-swap map, verb frames, subjects, objects, role heads, and first names. The `Lexicon` class filters all of them for one tokenizer so that every target is a single token.
 
-The module is imported as `semantic_role_generation.lexicon`.
+The module is imported as `data_generation.lexicon`.
 
 ## Terms
 
@@ -15,7 +15,7 @@ The module is imported as `semantic_role_generation.lexicon`.
 ## Configuration
 
 ```python
-from semantic_role_generation.lexicon import Lexicon, LexiconConfig
+from data_generation.lexicon import Lexicon, LexiconConfig
 
 config = LexiconConfig(
     tokenizer_name="EleutherAI/pythia-1b",
@@ -78,8 +78,8 @@ lexicon.ioi_objects                  # ring, kiss, bone, ...
 The unfiltered lists are importable for inspection:
 
 ```python
-from semantic_role_generation.lexicon import ROLES, SCAFFOLDS, ROLE_CUE_SWAP, VERBS, FRAME
-from semantic_role_generation.lexicon import AGENTS, THEMES, HEADS, NAMES, IOI_PLACES, IOI_OBJECTS
+from data_generation.lexicon import ROLES, SCAFFOLDS, ROLE_CUE_SWAP, VERBS, FRAME
+from data_generation.lexicon import AGENTS, THEMES, HEADS, NAMES, IOI_PLACES, IOI_OBJECTS
 ```
 
 ## Tokenization helpers

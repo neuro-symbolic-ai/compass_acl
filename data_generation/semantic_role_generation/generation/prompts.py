@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from ..lexicon import Lexicon
+from ...lexicon import Lexicon
 from .config import GenerationConfig
 from .utils import build_full_sentence, replace_last_scaffold, target_leaks
 

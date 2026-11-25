@@ -2,7 +2,7 @@
 
 This module builds the contrastive minimal pairs used for circuit discovery. For each semantic role it writes clean prompts that end at the role's scaffold, a corrupted prompt whose scaffold cues a different role, a harder corruption with a preface clause, and same-role interventions on the full sentence.
 
-The module is imported as `semantic_role_generation.generation` and takes its word inventories from the [lexicon](lexicon.md).
+The module is imported as `data_generation.semantic_role_generation` (the `generation` subpackage is re-exported there) and takes its word inventories from the [lexicon](lexicon.md).
 
 ## Example
 
@@ -20,7 +20,7 @@ Clean and corrupted prompts always have the same number of tokens, so activation
 ## Configuration
 
 ```python
-from semantic_role_generation.generation import GenerationConfig
+from data_generation.semantic_role_generation import GenerationConfig
 
 config = GenerationConfig(
     out_dir="./data/semroles",
@@ -48,8 +48,8 @@ GenerationConfig.small()     # 50 examples per role, for smoke tests
 ## Generating a dataset
 
 ```python
-from semantic_role_generation.lexicon import Lexicon, LexiconConfig
-from semantic_role_generation.generation import RoleDatasetGenerator, GenerationConfig
+from data_generation.lexicon import Lexicon, LexiconConfig
+from data_generation.semantic_role_generation import RoleDatasetGenerator, GenerationConfig
 
 lexicon = Lexicon(LexiconConfig.default(tokenizer_name="EleutherAI/pythia-1b"))
 generator = RoleDatasetGenerator(lexicon, GenerationConfig.default(out_dir="./data/semroles_v1"))
@@ -61,8 +61,8 @@ report = generator.generate_all()
 Or from the command line, from the repository root:
 
 ```bash
-python -m semantic_role_generation.scripts.generate_dataset \
-    --tokenizer EleutherAI/pythia-1b --out_dir ./data/semroles_v1 --n_per_role 1500 --seed 1337
+python -m data_generation.scripts.generate_dataset \
+    --tokenizer EleutherAI/pythia-1b --out_dir ./data/semroles_v1 --n_per_role 1500 --seed 42
 ```
 
 | Argument | Purpose |
@@ -70,7 +70,7 @@ python -m semantic_role_generation.scripts.generate_dataset \
 | `--tokenizer` | Hugging Face tokenizer used to filter words and check token parity. |
 | `--out_dir` | Output folder, one subfolder per role. |
 | `--n_per_role` | Examples to keep per role (default: `1500`). |
-| `--seed` | Random seed (default: `1337`). |
+| `--seed` | Random seed (default: `42`; `GenerationConfig` itself defaults to `1337`). |
 | `--roles` | Subset of roles, for example `--roles Goal Location`. |
 | `--scaffold_markers` | `1token` (paper setting) or `2token`; see the lexicon guide. |
 | `--legacy` | Reproduce the original generator, keeping identical clean/corrupted pairs. |
@@ -111,7 +111,7 @@ For sanity checks, each clean prompt can be rewritten with another scaffold of t
 
 ```python
 import pandas as pd
-from semantic_role_generation.generation import paraphrase_prompts
+from data_generation.semantic_role_generation import paraphrase_prompts
 
 prompts = pd.read_csv("./data/semroles_v1/Path/prompts.csv")
 paraphrased, skipped = paraphrase_prompts(prompts, "Path", lexicon)

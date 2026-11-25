@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 import pandas as pd
 
-from ..lexicon import Lexicon
+from ...lexicon import Lexicon
 from .config import GenerationConfig
 from .prompts import PromptBuilder
 from .utils import build_full_sentence, target_leaks

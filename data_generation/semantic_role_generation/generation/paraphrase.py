@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 
 import pandas as pd
 
-from ..lexicon import Lexicon
+from ...lexicon import Lexicon
 from .utils import find_scaffold_in_prompt
 
 

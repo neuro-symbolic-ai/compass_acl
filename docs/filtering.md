@@ -1,8 +1,8 @@
 # Filtering
 
-This module scores generated minimal pairs with a language model and keeps the pairs the model answers correctly, so that circuit discovery runs on behaviour the model actually has.
+This module scores generated minimal pairs with a language model and keeps the pairs the model answers correctly, so that circuit discovery runs on behaviour the model actually has. It works on the semantic-role folders and on any CSV with the same columns, such as the [IOI](ioi.md) pairs.
 
-The module is imported as `semantic_role_generation.filtering`.
+The module is imported as `data_generation.filtering`.
 
 ## What is scored
 
@@ -18,7 +18,7 @@ For each prompt column in `contexts` (by default `clean`, `corrupted` and `corru
 ## Configuration
 
 ```python
-from semantic_role_generation.filtering import FilterConfig
+from data_generation.filtering import FilterConfig
 
 config = FilterConfig(
     model_name="EleutherAI/pythia-1b",
@@ -46,7 +46,7 @@ FilterConfig.clean_only()    # score only the clean prompt; one split, clean_cor
 ## Filtering a dataset
 
 ```python
-from semantic_role_generation.filtering import RoleFilter, FilterConfig
+from data_generation.filtering import RoleFilter, FilterConfig
 
 role_filter = RoleFilter(FilterConfig.default(model_name="EleutherAI/pythia-1b", device="cuda"))
 coverage = role_filter.filter_all("./data/semroles_v1", "./data/semroles_v1_filtered")
@@ -57,7 +57,7 @@ coverage = role_filter.filter_all("./data/semroles_v1", "./data/semroles_v1_filt
 Or from the command line, from the repository root:
 
 ```bash
-python -m semantic_role_generation.scripts.filter_dataset \
+python -m data_generation.scripts.filter_dataset \
     --data_root ./data/semroles_v1 --out_dir ./data/semroles_v1_filtered \
     --model_name EleutherAI/pythia-1b --device cuda
 ```
@@ -105,7 +105,7 @@ The scored CSVs add, for each context prefix (`clean`, `corr`, `hard`): `<prefix
 `next_token_probs` pads a batch and reads each prompt's logits at its own last token, taken from the attention mask, so the result does not depend on the tokenizer's padding side or on which other prompts share the batch. Only the probabilities of the candidate tokens are kept.
 
 ```python
-from semantic_role_generation.filtering import load_model, next_token_probs, space_token_id, prefers_target
+from data_generation.filtering import load_model, next_token_probs, space_token_id, prefers_target
 
 tokenizer, model = load_model("EleutherAI/pythia-1b", device="cuda")
 target = space_token_id(tokenizer, "student")
@@ -121,7 +121,7 @@ prefers_target(probs[0], target, [corrupt])   # True if p(student) > p(garden)
 
 ```python
 import pandas as pd
-from semantic_role_generation.filtering import compute_behavioral_stats, print_stats
+from data_generation.filtering import compute_behavioral_stats, print_stats
 
 scored = pd.read_csv("./data/semroles_v1_filtered/diagnostics/all_scored.csv")
 stats, both_correct = compute_behavioral_stats(scored)

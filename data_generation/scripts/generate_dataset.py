@@ -27,8 +27,13 @@ def main():
     lexicon = Lexicon(LexiconConfig(tokenizer_name=args.tokenizer, scaffold_markers=args.scaffold_markers,
                                     roles=args.roles))
     print("Lexicon coverage:", lexicon.summary())
-    preset = GenerationConfig.legacy if args.legacy else GenerationConfig.default
-    config = preset(out_dir=args.out_dir, n_per_role=args.n_per_role, seed=args.seed, roles=args.roles)
+    config = GenerationConfig(
+        out_dir=args.out_dir,
+        n_per_role=args.n_per_role,
+        seed=args.seed,
+        roles=args.roles,
+        skip_identical_corruption=not args.legacy,
+    )
     RoleDatasetGenerator(lexicon, config).generate_all()
     print("Done. Outputs in:", args.out_dir)
 
