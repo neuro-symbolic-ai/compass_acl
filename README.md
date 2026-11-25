@@ -15,7 +15,7 @@ This repository contains the code for the paper "Emergence and Localisation of S
 
 ![Animation of the COMPASS method](compass_method.gif)
 
-The code works with the repository's own transformer implementation and with TransformerLens `HookedTransformer` models, and is designed for synthetic corpora generated with ABSynth. Alongside circuit discovery, it provides analysis modules for linguistic probes, intrinsic dimensions, Hessian spectra and output monitoring, and MechInt-DB, which stores circuits as OWL/RDF knowledge graphs.
+The code works with the repository's own transformer implementation and with TransformerLens `HookedTransformer` models, and is designed for synthetic corpora generated with [ABSynth](https://github.com/nura-j/ABSynth_dataset). The `data_generation` package builds the contrastive minimal pairs for semantic roles (and the IOI and greater-than reference tasks) and filters them by model behaviour. Alongside circuit discovery, the repository provides analysis modules for linguistic probes, intrinsic dimensions, Hessian spectra and output monitoring, and MechInt-DB, which stores circuits as OWL/RDF knowledge graphs.
 
 ## Setup
 
@@ -33,9 +33,27 @@ pip install -r requirements.txt
 pip install pygraphviz==1.14
 ```
 
+Both routes install [ABSynth](https://github.com/nura-j/ABSynth_dataset), the synthetic data generator, from GitHub.
+
 ## Usage
 
 Run all commands and scripts from the repository root so that the `eap`, `trace` and `mechint_db` packages can be imported.
+
+The pipeline has three stages: generate minimal pairs, filter them by model behaviour, and train while tracking circuits.
+
+### 1. Generate and filter minimal pairs
+
+```bash
+python -m data_generation.scripts.generate_dataset \
+    --tokenizer EleutherAI/pythia-1b --out_dir ./data/semroles --n_per_role 1500
+python -m data_generation.scripts.filter_dataset \
+    --data_root ./data/semroles --out_dir ./data/semroles_filtered \
+    --model_name EleutherAI/pythia-1b --device cuda
+```
+
+The generator writes one folder per semantic role with `prompts.csv`, `interventions.csv` and `dataset.jsonl`; the filter keeps the pairs the model answers correctly under `<Role>/both_correct/`. See [docs/generation.md](docs/generation.md) and [docs/filtering.md](docs/filtering.md).
+
+### 2. Train and track circuits
 
 The example below trains a small decoder-only model on an ABSynth corpus and discovers semantic-role circuits with EAP-IG at regular checkpoints.
 
@@ -48,7 +66,7 @@ from trace.training import Trainer, TrainingConfig
 from trace.transformer import Transformer, TransformerConfig
 
 CORPUS_PATH = "./data/corpus.json"           # ABSynth corpus
-CNP_PATH = "./data/minimal_pairs.json"       # clean/corrupt minimal pairs
+CNP_PATH = "./data/semroles_filtered/Goal/both_correct/prompts.csv"   # filtered minimal pairs
 
 tokenizer = create_tokenizer_from_data(vocab_file=CORPUS_PATH)
 
@@ -96,7 +114,7 @@ best_loss, analysis_results = trainer.train(
 )
 ```
 
-The minimal-pair file is a JSON or CSV table with the columns `clean`, `corrupted`, `correct_idx` and `incorrect_idx`.
+The minimal-pair file is a CSV or JSON table with the columns `clean`, `corrupted`, `correct_idx` and `incorrect_idx`, as written by the filter.
 
 ### Training arguments
 
@@ -115,12 +133,17 @@ The minimal-pair file is a JSON or CSV table with the columns `clean`, `corrupte
 | `track_pos_performance` / `track_semantic_roles_performance` | Track output accuracy by POS and semantic-role category. |
 | `plots_path` | Folder for plots and analysis histories. |
 
-### Analysis modules
+### Modules
 
 Each module can also be used on its own. Usage guides are in `docs/`:
 
 | Module | Import | Guide |
 | --- | --- | --- |
+| Lexicon | `data_generation.lexicon` | [docs/lexicon.md](docs/lexicon.md) |
+| Semantic-role pairs | `data_generation.semantic_role_generation` | [docs/generation.md](docs/generation.md) |
+| IOI pairs | `data_generation.ioi` | [docs/ioi.md](docs/ioi.md) |
+| Greater-than prompts | `data_generation.numbers` | [docs/greater_than.md](docs/greater_than.md) |
+| Behavioural filtering | `data_generation.filtering` | [docs/filtering.md](docs/filtering.md) |
 | Transformer models | `trace.transformer` | [docs/transformer_models.md](docs/transformer_models.md) |
 | Intrinsic dimensions | `trace.intrisic_dimensions` | [docs/intrinsic_dimensions.md](docs/intrinsic_dimensions.md) |
 | Hessian analysis | `trace.hessian` | [docs/hessian_analysis.md](docs/hessian_analysis.md) |
@@ -131,7 +154,7 @@ Each module can also be used on its own. Usage guides are in `docs/`:
 
 ## Outputs
 
-During training, analysis histories are written as JSON under `plots_path`, one folder per enabled module (for example `eap/eap_history.json` and `intrinsic_dimensions/intrinsic_dimension_history.json`). Circuit graphs are saved under `log_dir/eap_graphs/`, the model checkpoint is saved to `save_path`, and MechInt-DB exports are written as Turtle files under `owl_output_dir`. Generated results are stored locally and should not be committed.
+Generated datasets go under `out_dir` (one folder per role) and filtered splits under the filter's `out_dir`, each with a `report.json` or `coverage.json` recording the configuration. During training, analysis histories are written as JSON under `plots_path`, one folder per enabled module (for example `eap/eap_history.json` and `intrinsic_dimensions/intrinsic_dimension_history.json`). Circuit graphs are saved under `log_dir/eap_graphs/`, the model checkpoint is saved to `save_path`, and MechInt-DB exports are written as Turtle files under `owl_output_dir`. Generated results are stored locally and should not be committed.
 
 ## Repository layout
 
@@ -142,7 +165,14 @@ During training, analysis histories are written as JSON under `plots_path`, one 
 ├── requirements.txt
 ├── LICENSE.txt
 ├── compass_method.gif          # Method animation
-├── docs/                       # Usage guides for the analysis modules
+├── docs/                       # Usage guides for every module
+├── data_generation/            # Minimal-pair datasets
+│   ├── lexicon/                # Roles, scaffolds, word lists and names, filtered per tokenizer
+│   ├── semantic_role_generation/   # Clean/corrupted pairs for the ten semantic roles
+│   ├── ioi/                    # Indirect-object-identification pairs
+│   ├── numbers/                # Greater-than prompts and metric
+│   ├── filtering/              # Model-based filtering into both_correct / clean_only_correct
+│   └── scripts/                # Command-line entry points
 ├── eap/                        # Circuit discovery with EAP and EAP-IG
 │   ├── analyzer.py             # Attribution, top-k circuit and faithfulness
 │   ├── attribute.py            # Edge scoring methods

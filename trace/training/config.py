@@ -114,7 +114,7 @@ class TrainingConfig:
     # EAP analysis
     track_eap: bool = False
     Method = Literal['EAP', 'EAP-IG-inputs', 'clean-corrupted',
-    'EAP-IG-activations', 'information-flow-routes', 'exact']
+    'EAP-IG-activations']
     eap_method: Method = 'EAP'
     eap_ig_steps: int = 5
     eap_top_k: int = 50

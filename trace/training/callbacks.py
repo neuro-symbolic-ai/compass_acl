@@ -265,12 +265,14 @@ class TrainingCallbacks:
                 ig_steps=self.config.eap_ig_steps,
                 top_k=self.config.eap_top_k,
                 cnp_dataset_path=self.config.cnp_dataset_path,
-                intervention_type=self.config.eap_intervention_types,
+                # intervention_type=self.config.eap_intervention_types,
+                intervention_type=self.config.eap_intervention_types[0] if self.config.eap_intervention_types else 'role_cross',
                 log_dir=self.config.log_dir,
                 device=self.device,
                 show_plots=self.config.show_plots,
                 track_last_token_only=self.config.eap_track_last_token_only,
                 eap_batch_size=self.config.eap_batch_size,
+                plot_circuit_step_graph=self.config.plot_circuit_step_graph,
             )
             self.eap_analyzer = EAPAnalyzer(eap_config)
         else:
@@ -536,6 +538,7 @@ class TrainingCallbacks:
 
                 # Store results
                 self.analysis_results['eap_results_owl'][step] = eap_results_owl
+                self.analysis_results['eap'][step] = (eap_results_owl, graph)
 
                 # Store for temporal evolution if enabled
                 if self.config.track_circuit_evolution:
@@ -674,10 +677,13 @@ class TrainingCallbacks:
                 print(f"Failed to generate semantic role visualizations: {e}")
 
         # Generate EAP visualizations
-        if self.eap_analyzer and self.analysis_results['eap']:
+        # if self.eap_analyzer and self.analysis_results['eap']:
+        eap_analyzer = self.eap_analyzer or self.eap_analyzer_owl
+        if eap_analyzer and eap_analyzer.visualizer and self.analysis_results['eap']:
             try:
                 print("Generating EAP visualizations...")
-                self.eap_analyzer.visualizer.plot_eap_evolution(
+                eap_analyzer.visualizer.plot_eap_evolution(
+                # self.eap_analyzer.visualizer.plot_eap_evolution(
                     self.analysis_results['eap'], model_name
                 )
             except Exception as e:
@@ -770,7 +776,8 @@ class TrainingCallbacks:
 
             # Count successful OWL exports
             owl_exports = 0
-            for step_results in self.analysis_results.get('eap', {}).values():
+            # for step_results in self.analysis_results.get('eap', {}).values():
+            for step_results in self.analysis_results.get('eap_results_owl', {}).values():
                 if isinstance(step_results, dict) and 'owl_export_path' in step_results:
                     owl_exports += 1
             summary['owl_export']['successful_exports'] = owl_exports
