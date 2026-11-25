@@ -9,7 +9,7 @@ class EAPConfig:
 
     # Core EAP parameters
     Method = Literal['EAP', 'EAP-IG-inputs', 'clean-corrupted',
-    'EAP-IG-activations', 'information-flow-routes', 'exact']
+    'EAP-IG-activations']
     method: Method = 'EAP-IG-inputs'
     ig_steps: int = 5
     top_k: int = 50
